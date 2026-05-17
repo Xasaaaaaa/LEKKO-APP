@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+
+<html lang="ru">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>LEKKO APP</title>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <style>
+
+        * {
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+        }
+
+        body {
+            background:#0f172a;
+            color:white;
+            font-family:Arial,sans-serif;
+            padding:15px;
+        }
+
+        #dashboard,
+        #pharmacy,
+        #shift,
+        #profile,
+        #history {
+            width:100%;
+            max-width:500px;
+            margin:0 auto;
+        }
+
+        h1 {
+            text-align:center;
+            margin-bottom:20px;
+            font-size:32px;
+        }
+
+        h2 {
+            margin-bottom:15px;
+        }
+
+        p {
+            margin-top:10px;
+            margin-bottom:10px;
+        }
+
+        button {
+            width:100%;
+            min-height:55px;
+            border:none;
+            border-radius:14px;
+            background:#3b82f6;
+            color:white;
+            font-size:18px;
+            margin-top:12px;
+            cursor:pointer;
+        }
+
+        button:active {
+            transform:scale(0.98);
+        }
+
+        input,
+        select,
+        textarea {
+            width:100%;
+            border:none;
+            border-radius:14px;
+            padding:14px 15px;
+            margin-top:12px;
+            background:#1e293b;
+            color:white;
+            font-size:16px;
+            font-family:Arial,sans-serif;
+            resize:none;
+        }
+
+        input,
+        select {
+            height:55px;
+            padding:0 15px;
+        }
+
+        #photoContainer {
+            display:flex;
+            flex-wrap:wrap;
+            gap:10px;
+            margin-top:15px;
+        }
+
+        #photoContainer img {
+            width:90px;
+            height:90px;
+            border-radius:12px;
+            object-fit:cover;
+        }
+
+        .back-btn {
+            background:#1e293b;
+        }
+
+        .shift-card {
+            background:#1e293b;
+            padding:18px;
+            border-radius:14px;
+            margin-top:15px;
+            line-height:1.8;
+            font-size:16px;
+        }
+
+        #shiftStatus {
+            background:#1e293b;
+            border-radius:14px;
+            padding:16px;
+            font-size:16px;
+            line-height:1.8;
+            margin-top:12px;
+            display:none;
+        }
+
+        #shiftTimer {
+            text-align:center;
+            font-size:22px;
+            margin-top:12px;
+            color:#60a5fa;
+            min-height:32px;
+        }
+
+        @media(max-width:480px) {
+
+            body {
+                padding:12px;
+            }
+
+            h1 {
+                font-size:28px;
+            }
+
+            button {
+                min-height:60px;
+                font-size:17px;
+            }
+
+            input,
+            select {
+                height:58px;
+                font-size:16px;
+            }
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <!-- DASHBOARD -->
+
+    <div id="dashboard">
+
+        <h1>LEKKO APP</h1>
+
+        <p id="user"></p>
+
+        <button onclick="openPage('pharmacy')">
+            ➕ Аптека
+        </button>
+
+        <button onclick="openPage('shift')">
+            🕒 Смена
+        </button>
+
+        <button onclick="openPage('history')">
+            📋 История смен
+        </button>
+
+        <button onclick="openPage('profile')">
+            👤 Профиль
+        </button>
+
+    </div>
+
+    <!-- АПТЕКА -->
+
+    <div id="pharmacy" style="display:none;">
+
+        <button class="back-btn" onclick="back()">
+            ← Назад
+        </button>
+
+        <input id="name"
+               placeholder="Название аптеки">
+
+        <input id="lpr_name"
+               placeholder="ЛПР (имя)">
+
+        <input type="tel"
+               id="lpr_phone"
+               placeholder="+998 (__) ___-__-__"
+               maxlength="19">
+
+        <select id="software"
+                onchange="toggleSoftwareInput()">
+
+            <option value="">
+                Выберите программу
+            </option>
+
+            <option value="OSON APTEKA">
+                OSON APTEKA
+            </option>
+
+            <option value="FOM">
+                FOM
+            </option>
+
+            <option value="ABU">
+                ABU
+            </option>
+
+            <option value="other">
+                ➕ Другое
+            </option>
+
+        </select>
+
+        <input id="software_custom"
+               placeholder="Введите свою программу"
+               style="display:none;">
+
+        <select id="pharmacy_status">
+
+            <option value="">
+                Статус контакта
+            </option>
+
+            <option value="cold">
+                ❄️ Холодный контакт
+            </option>
+
+            <option value="inwork">
+                🔄 В работе
+            </option>
+
+            <option value="deal">
+                ✅ Договорились
+            </option>
+
+            <option value="decline">
+                ❌ Отказ
+            </option>
+
+        </select>
+
+        <textarea
+            id="contact_comment"
+            placeholder="💬 Комментарий к контакту..."
+            rows="3"
+        ></textarea>
+
+        <button onclick="openFilePicker()">
+            📸 Добавить фото
+        </button>
+
+        <input type="file"
+               id="photo"
+               multiple
+               style="display:none"
+               onchange="previewPhotos()">
+
+        <div id="photoContainer"></div>
+
+        <button onclick="clearPhotos()">
+            🗑 Удалить фото
+        </button>
+
+        <button onclick="savePharmacy()">
+            💾 Сохранить
+        </button>
+
+    </div>
+
+    <!-- СМЕНА -->
+
+    <div id="shift" style="display:none;">
+
+        <button class="back-btn" onclick="back()">
+            ← Назад
+        </button>
+
+        <h2>Смена</h2>
+
+        <div class="shift-card">
+
+            <p>🕘 Первая смена: 09:00 - 13:00</p>
+
+            <p>🕑 Вторая смена: 14:00 - 18:00</p>
+
+        </div>
+
+        <div id="shiftTimer"></div>
+
+        <div id="shiftStatus"></div>
+
+        <div id="dailyPlan"></div>
+
+        <button onclick="startShift()">
+            🟢 Начать смену
+        </button>
+
+        <button onclick="endShift()">
+            🔴 Завершить смену
+        </button>
+
+    </div>
+
+    <!-- ИСТОРИЯ -->
+
+    <div id="history" style="display:none;">
+
+        <button class="back-btn" onclick="back()">
+            ← Назад
+        </button>
+
+        <h2>История смен</h2>
+
+        <div id="historyContent"></div>
+
+    </div>
+
+    <!-- ПРОФИЛЬ -->
+
+    <div id="profile" style="display:none;">
+
+        <button class="back-btn" onclick="back()">
+            ← Назад
+        </button>
+
+        <div id="profileContent"></div>
+
+    </div>
+
+    <script src="app.js"></script>
+
+</body>
+
+</html>
