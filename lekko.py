@@ -3,6 +3,7 @@ import json
 import os
 import math
 import asyncpg
+import aiohttp
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart
@@ -10,7 +11,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, W
 
 TOKEN = os.environ.get("BOT_TOKEN", "8492885588:AAFPmxL_u4elT0Z5qHVuP0-FicEjPpkp-Xc")
 DATABASE_URL = os.environ.get("DATABASE_URL")
-WEB_APP_URL = "https://fascinating-medovik-cbeefa.netlify.app"
+WEB_APP_URL = "https://vocal-toffee-d5d45b.netlify.app"
 ADMIN_ID = 7526702987
 
 bot = Bot(token=TOKEN)
@@ -25,6 +26,19 @@ def haversine(lat1, lon1, lat2, lon2):
     dlon = lon2 - lon1
     a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
     return round(R * 2 * math.asin(math.sqrt(a)), 2)
+
+
+async def get_address(lat, lon):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json",
+                headers={"User-Agent": "LekkoApp/1.0"}
+            ) as resp:
+                geo = await resp.json()
+                return geo.get("display_name", f"{lat}, {lon}")
+    except:
+        return f"{lat}, {lon}"
 
 
 async def init_db():
@@ -55,9 +69,7 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
-        await conn.execute("""
-            ALTER TABLE shifts ADD COLUMN IF NOT EXISTS distance_km FLOAT
-        """)
+        await conn.execute("ALTER TABLE shifts ADD COLUMN IF NOT EXISTS distance_km FLOAT")
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS pharmacies (
                 id SERIAL PRIMARY KEY,
@@ -70,9 +82,15 @@ async def init_db():
                 status TEXT,
                 comment TEXT,
                 photos_count INT,
+                latitude FLOAT,
+                longitude FLOAT,
+                map_link TEXT,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
+        await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS latitude FLOAT")
+        await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS longitude FLOAT")
+        await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS map_link TEXT")
     print("✅ База данных готова")
 
 
@@ -114,13 +132,11 @@ async def notify_admin(text, lat=None, lon=None):
 
 
 async def handle_options(request):
-    return web.Response(
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-        }
-    )
+    return web.Response(headers={
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+    })
 
 
 async def handle_event(request):
@@ -140,11 +156,12 @@ async def handle_event(request):
         print(f"❌ Ошибка JSON: {e}")
         return web.Response(status=400, text="Bad JSON", headers=headers)
 
-    event = data.get("type")
+    event    = data.get("type")
     username = data.get("user") or "Сотрудник"
-    user_id = data.get("chat_id")
-    lat = data.get("latitude")
-    lon = data.get("longitude")
+    user_id  = data.get("chat_id")
+    lat      = data.get("latitude")
+    lon      = data.get("longitude")
+    map_link = data.get("map")
 
     if not user_id:
         return web.Response(status=400, text="No chat_id", headers=headers)
@@ -160,7 +177,7 @@ async def handle_event(request):
                     data.get("time"),
                     float(lat) if lat else None,
                     float(lon) if lon else None,
-                    data.get("map"))
+                    map_link)
 
             text = (
                 f"🟢 *{username} вышел на смену*\n"
@@ -176,7 +193,6 @@ async def handle_event(request):
 
         elif event == "SHIFT_ENDED":
             async with db_pool.acquire() as conn:
-
                 shift = await conn.fetchrow("""
                     SELECT latitude, longitude FROM shifts
                     WHERE id = (
@@ -222,15 +238,24 @@ async def handle_event(request):
 
         elif event == "PHARMACY_CREATED":
             p = data.get("data", {})
+
             async with db_pool.acquire() as conn:
                 await conn.execute("""
                     INSERT INTO pharmacies
-                    (user_id, first_name, name, lpr_name, lpr_phone, software, status, comment, photos_count)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                    (user_id, first_name, name, lpr_name, lpr_phone, software, status, comment, photos_count, latitude, longitude, map_link)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
                 """, int(user_id), username,
                     p.get("name"), p.get("lprName"), p.get("lprPhone"),
                     p.get("software"), p.get("status"), p.get("comment"),
-                    p.get("photosCount", 0))
+                    p.get("photosCount", 0),
+                    float(lat) if lat else None,
+                    float(lon) if lon else None,
+                    map_link)
+
+            address_text = ""
+            if lat and lon:
+                address = await get_address(lat, lon)
+                address_text = f"\n🗺 Адрес: {address}\n📌 {map_link}"
 
             text = (
                 f"🏥 *Новая аптека от {username}*\n"
@@ -241,12 +266,15 @@ async def handle_event(request):
                 f"📊 Статус: {p.get('status') or '—'}\n"
                 f"💬 Комментарий: {p.get('comment') or '—'}\n"
                 f"📸 Фото: {p.get('photosCount')} шт."
+                f"{address_text}"
             )
 
             await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown")
+            if lat and lon:
+                await bot.send_location(chat_id=int(user_id), latitude=float(lat), longitude=float(lon))
 
             if int(user_id) != ADMIN_ID:
-                await notify_admin(text)
+                await notify_admin(text, lat, lon)
 
     except Exception as e:
         print(f"❌ Ошибка обработки: {e}")

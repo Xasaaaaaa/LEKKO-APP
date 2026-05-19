@@ -112,8 +112,7 @@ function addShiftStat(minutes) {
 }
 
 function addPharmacyStat() {
-    const s = getStats();
-    localStorage.setItem("stat_pharmacies", s.pharmaciesCount + 1);
+    localStorage.setItem("stat_pharmacies", getStats().pharmaciesCount + 1);
 }
 
 function formatTime(minutes) {
@@ -537,28 +536,61 @@ function savePharmacy() {
     const comment = document.getElementById("contact_comment").value.trim();
     const name = document.getElementById("name").value;
 
-    if (!name)           { alert("Введите название аптеки"); return; }
+    if (!name)            { alert("Введите название аптеки"); return; }
     if (photos.length === 0) { alert("Добавьте фото"); return; }
 
-    addPharmacyStat();
-    const fact = Number(localStorage.getItem("dayFact") || 0);
-    localStorage.setItem("dayFact", fact + 1);
+    navigator.geolocation.getCurrentPosition(
+        function(pos) {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            const mapLink = `https://www.google.com/maps?q=${lat},${lon}`;
 
-    sendToServer({
-        type: "PHARMACY_CREATED",
-        user: user?.first_name || null,
-        data: {
-            name,
-            lprName:     document.getElementById("lpr_name").value,
-            lprPhone:    document.getElementById("lpr_phone").value,
-            software:    softwareValue,
-            status:      document.getElementById("pharmacy_status").value,
-            comment,
-            photosCount: photos.length
-        }
-    });
+            addPharmacyStat();
+            const fact = Number(localStorage.getItem("dayFact") || 0);
+            localStorage.setItem("dayFact", fact + 1);
 
-    alert("🏥 Аптека сохранена");
+            sendToServer({
+                type: "PHARMACY_CREATED",
+                user: user?.first_name || null,
+                latitude: lat,
+                longitude: lon,
+                map: mapLink,
+                data: {
+                    name,
+                    lprName:     document.getElementById("lpr_name").value,
+                    lprPhone:    document.getElementById("lpr_phone").value,
+                    software:    softwareValue,
+                    status:      document.getElementById("pharmacy_status").value,
+                    comment,
+                    photosCount: photos.length
+                }
+            });
+
+            alert("🏥 Аптека сохранена");
+        },
+        function() {
+            addPharmacyStat();
+            const fact = Number(localStorage.getItem("dayFact") || 0);
+            localStorage.setItem("dayFact", fact + 1);
+
+            sendToServer({
+                type: "PHARMACY_CREATED",
+                user: user?.first_name || null,
+                data: {
+                    name,
+                    lprName:     document.getElementById("lpr_name").value,
+                    lprPhone:    document.getElementById("lpr_phone").value,
+                    software:    softwareValue,
+                    status:      document.getElementById("pharmacy_status").value,
+                    comment,
+                    photosCount: photos.length
+                }
+            });
+
+            alert("🏥 Аптека сохранена");
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
 }
 
 
@@ -573,7 +605,6 @@ function startShift() {
     }
 
     navigator.geolocation.getCurrentPosition(
-
         function(pos) {
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
@@ -612,11 +643,9 @@ function startShift() {
                     alert(`🟢 Смена начата в ${formattedTime}\n\n📍 Координаты: ${lat}, ${lon}\n\n🗺 Google Maps:\n${mapLink}`);
                 });
         },
-
         function() {
             alert("❌ Не удалось получить геолокацию.\nРазрешите GPS в Telegram.");
         },
-
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
 }
@@ -633,7 +662,6 @@ function endShift() {
     }
 
     navigator.geolocation.getCurrentPosition(
-
         function(pos) {
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
@@ -705,7 +733,6 @@ function endShift() {
             localStorage.removeItem("shiftActive");
             localStorage.removeItem("shiftStart");
         },
-
         function() { alert("❌ Не удалось получить геолокацию."); },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
