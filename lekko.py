@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import math
 import asyncpg
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F
@@ -15,6 +16,15 @@ ADMIN_ID = 7526702987
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 db_pool = None
+
+
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    return round(R * 2 * math.asin(math.sqrt(a)), 2)
 
 
 async def init_db():
@@ -41,8 +51,12 @@ async def init_db():
                 longitude FLOAT,
                 map_link TEXT,
                 date TEXT,
+                distance_km FLOAT,
                 created_at TIMESTAMP DEFAULT NOW()
             )
+        """)
+        await conn.execute("""
+            ALTER TABLE shifts ADD COLUMN IF NOT EXISTS distance_km FLOAT
         """)
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS pharmacies (
@@ -162,20 +176,41 @@ async def handle_event(request):
 
         elif event == "SHIFT_ENDED":
             async with db_pool.acquire() as conn:
-                await conn.execute("""
-                    UPDATE shifts SET end_time=$1, worked=$2
+
+                shift = await conn.fetchrow("""
+                    SELECT latitude, longitude FROM shifts
                     WHERE id = (
                         SELECT id FROM shifts
-                        WHERE user_id=$3 AND end_time IS NULL
+                        WHERE user_id=$1 AND end_time IS NULL
                         ORDER BY created_at DESC
                         LIMIT 1
                     )
-                """, data.get("time"), data.get("worked"), int(user_id))
+                """, int(user_id))
+
+                distance = None
+                distance_text = ""
+                if shift and shift["latitude"] and lat and lon:
+                    distance = haversine(
+                        shift["latitude"], shift["longitude"],
+                        float(lat), float(lon)
+                    )
+                    distance_text = f"\n📍 Расстояние: *{distance} км*"
+
+                await conn.execute("""
+                    UPDATE shifts SET end_time=$1, worked=$2, distance_km=$3
+                    WHERE id = (
+                        SELECT id FROM shifts
+                        WHERE user_id=$4 AND end_time IS NULL
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    )
+                """, data.get("time"), data.get("worked"), distance, int(user_id))
 
             text = (
                 f"🔴 *{username} завершил смену*\n"
                 f"🕒 Время: {data.get('time')}\n"
                 f"⏱ Отработано: {data.get('worked')}"
+                f"{distance_text}"
             )
 
             await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown")
