@@ -9,7 +9,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, W
 
 TOKEN = os.environ.get("BOT_TOKEN", "8492885588:AAFPmxL_u4elT0Z5qHVuP0-FicEjPpkp-Xc")
 DATABASE_URL = os.environ.get("DATABASE_URL")
-WEB_APP_URL = "https://golden-croquembouche-ecc3d2.netlify.app"
+WEB_APP_URL = "https://fascinating-medovik-cbeefa.netlify.app"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()

@@ -2,6 +2,8 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 
 const user = tg.initDataUnsafe?.user;
+const chatId = tg.initDataUnsafe?.user?.id;
+const SERVER = "https://lekko-app-production.up.railway.app";
 
 
 // =========================
@@ -20,6 +22,19 @@ document.getElementById("user").innerHTML =
     user ? `${getGreeting()}, <b>${user.first_name}</b>! 👋` : "Пользователь не найден";
 
 let photos = [];
+
+
+// =========================
+// ОТПРАВКА НА СЕРВЕР
+// =========================
+
+function sendToServer(data) {
+    return fetch(`${SERVER}/event`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data, chat_id: chatId })
+    }).catch(err => console.error("Ошибка отправки:", err));
+}
 
 
 // =========================
@@ -372,76 +387,38 @@ function renderProfile() {
     const savedAvatar = localStorage.getItem("userAvatar");
 
     const avatarContent = savedAvatar
-        ? `<img
-                id="avatarImg"
-                src="${savedAvatar}"
-                style="width:100%;height:100%;border-radius:50%;object-fit:cover;"
-           >`
-        : `<span id="avatarLetter" style="font-size:36px;">
-                ${name.charAt(0).toUpperCase()}
-           </span>`;
+        ? `<img id="avatarImg" src="${savedAvatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
+        : `<span id="avatarLetter" style="font-size:36px;">${name.charAt(0).toUpperCase()}</span>`;
 
     document.getElementById("profileContent").innerHTML = `
-
         <div style="text-align:center;padding:20px 0 10px;">
-
-            <div style="
-                width:80px;height:80px;border-radius:50%;
-                background:linear-gradient(135deg,#3b82f6,#1d4ed8);
-                display:flex;align-items:center;justify-content:center;
-                margin:0 auto 6px;overflow:hidden;cursor:pointer;position:relative;
-            " onclick="changeAvatar()">
+            <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;margin:0 auto 6px;overflow:hidden;cursor:pointer;position:relative;" onclick="changeAvatar()">
                 ${avatarContent}
-                <div style="
-                    position:absolute;bottom:0;left:0;right:0;
-                    background:rgba(0,0,0,0.45);
-                    font-size:11px;color:white;padding:3px 0;
-                    border-radius:0 0 50px 50px;
-                ">✏️</div>
+                <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.45);font-size:11px;color:white;padding:3px 0;border-radius:0 0 50px 50px;">✏️</div>
             </div>
-
-            <input
-                type="file"
-                id="avatarInput"
-                accept="image/*"
-                style="display:none;"
-                onchange="onAvatarChange(event)"
-            >
-
+            <input type="file" id="avatarInput" accept="image/*" style="display:none;" onchange="onAvatarChange(event)">
             <div style="font-size:22px;font-weight:bold;margin-top:8px;">${name}</div>
             <div style="color:#94a3b8;font-size:14px;margin-top:4px;">${username}</div>
-
-            <div style="
-                display:inline-flex;align-items:center;gap:6px;
-                background:#1e293b;border-radius:20px;
-                padding:6px 16px;margin-top:12px;
-                font-size:14px;color:#60a5fa;
-            ">${rank.icon} ${rank.label}</div>
-
+            <div style="display:inline-flex;align-items:center;gap:6px;background:#1e293b;border-radius:20px;padding:6px 16px;margin-top:12px;font-size:14px;color:#60a5fa;">${rank.icon} ${rank.label}</div>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;">
-
             <div style="background:#1e293b;border-radius:16px;padding:16px;text-align:center;">
                 <div style="font-size:28px;font-weight:bold;color:#3b82f6;">${s.shiftsCount}</div>
                 <div style="font-size:13px;color:#94a3b8;margin-top:4px;">Смен отработано</div>
             </div>
-
             <div style="background:#1e293b;border-radius:16px;padding:16px;text-align:center;">
                 <div style="font-size:28px;font-weight:bold;color:#3b82f6;">${s.pharmaciesCount}</div>
                 <div style="font-size:13px;color:#94a3b8;margin-top:4px;">Аптек загружено</div>
             </div>
-
             <div style="background:#1e293b;border-radius:16px;padding:16px;text-align:center;">
                 <div style="font-size:22px;font-weight:bold;color:#3b82f6;">${formatTime(s.totalMinutes)}</div>
                 <div style="font-size:13px;color:#94a3b8;margin-top:4px;">Всего отработано</div>
             </div>
-
             <div style="background:#1e293b;border-radius:16px;padding:16px;text-align:center;">
                 <div style="font-size:22px;font-weight:bold;color:#3b82f6;">${formatTime(s.bestShift)}</div>
                 <div style="font-size:13px;color:#94a3b8;margin-top:4px;">Рекорд смены</div>
             </div>
-
         </div>
 
         <div style="background:#1e293b;border-radius:16px;padding:16px;margin-top:12px;text-align:center;">
@@ -466,10 +443,7 @@ function renderHistory() {
     const el = document.getElementById("historyContent");
 
     if (history.length === 0) {
-        el.innerHTML = `
-            <div style="text-align:center;color:#94a3b8;margin-top:40px;font-size:15px;">
-                📭 История смен пока пуста
-            </div>`;
+        el.innerHTML = `<div style="text-align:center;color:#94a3b8;margin-top:40px;font-size:15px;">📭 История смен пока пуста</div>`;
         return;
     }
 
@@ -481,14 +455,10 @@ function renderHistory() {
             <div>⏱ Отработано: <b>${entry.worked}</b></div>
             ${entry.pharmacies ? `<div>🏥 Аптек: <b>${entry.pharmacies}</b></div>` : ""}
             ${entry.note
-                ? `<div style="margin-top:8px;padding:10px;background:#0f172a;border-radius:10px;font-size:14px;color:#94a3b8;">
-                       📝 ${entry.note}
-                   </div>`
+                ? `<div style="margin-top:8px;padding:10px;background:#0f172a;border-radius:10px;font-size:14px;color:#94a3b8;">📝 ${entry.note}</div>`
                 : `<div style="margin-top:8px;">
                        <input id="note_${i}" placeholder="Добавить заметку о смене..." style="margin-top:4px;height:44px;font-size:14px;">
-                       <button onclick="saveNote(${i})" style="min-height:38px;font-size:14px;margin-top:6px;background:#1d4ed8;">
-                           💾 Сохранить заметку
-                       </button>
+                       <button onclick="saveNote(${i})" style="min-height:38px;font-size:14px;margin-top:6px;background:#1d4ed8;">💾 Сохранить заметку</button>
                    </div>`
             }
         </div>
@@ -565,30 +535,29 @@ function savePharmacy() {
     }
 
     const comment = document.getElementById("contact_comment").value.trim();
+    const name = document.getElementById("name").value;
 
-    const data = {
+    if (!name)           { alert("Введите название аптеки"); return; }
+    if (photos.length === 0) { alert("Добавьте фото"); return; }
+
+    addPharmacyStat();
+    const fact = Number(localStorage.getItem("dayFact") || 0);
+    localStorage.setItem("dayFact", fact + 1);
+
+    sendToServer({
         type: "PHARMACY_CREATED",
         user: user?.first_name || null,
         data: {
-            name:        document.getElementById("name").value,
+            name,
             lprName:     document.getElementById("lpr_name").value,
             lprPhone:    document.getElementById("lpr_phone").value,
             software:    softwareValue,
             status:      document.getElementById("pharmacy_status").value,
-            comment:     comment,
+            comment,
             photosCount: photos.length
         }
-    };
+    });
 
-    if (!data.data.name)     { alert("Введите название аптеки"); return; }
-    if (photos.length === 0) { alert("Добавьте фото"); return; }
-
-    addPharmacyStat();
-
-    const fact = Number(localStorage.getItem("dayFact") || 0);
-    localStorage.setItem("dayFact", fact + 1);
-
-    tg.sendData(JSON.stringify(data));
     alert("🏥 Аптека сохранена");
 }
 
@@ -624,30 +593,24 @@ function startShift() {
 
             startShiftTimer();
 
+            sendToServer({
+                type: "SHIFT_STARTED",
+                user: user?.first_name,
+                time: formattedTime,
+                latitude: lat,
+                longitude: lon,
+                map: mapLink
+            });
+
             fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`)
                 .then(r => r.json())
                 .then(geo => {
                     const address = geo.display_name || `${lat}, ${lon}`;
-                    alert(
-                        `🟢 Смена начата в ${formattedTime}\n\n` +
-                        `📍 Локация:\n${address}\n\n` +
-                        `🗺 Google Maps:\n${mapLink}`
-                    );
+                    alert(`🟢 Смена начата в ${formattedTime}\n\n📍 Локация:\n${address}\n\n🗺 Google Maps:\n${mapLink}`);
                 })
                 .catch(() => {
-                    alert(
-                        `🟢 Смена начата в ${formattedTime}\n\n` +
-                        `📍 Координаты: ${lat}, ${lon}\n\n` +
-                        `🗺 Google Maps:\n${mapLink}`
-                    );
+                    alert(`🟢 Смена начата в ${formattedTime}\n\n📍 Координаты: ${lat}, ${lon}\n\n🗺 Google Maps:\n${mapLink}`);
                 });
-
-            tg.sendData(JSON.stringify({
-                type: "SHIFT_STARTED",
-                user: user?.first_name,
-                time: formattedTime,
-                latitude: lat, longitude: lon, map: mapLink
-            }));
         },
 
         function() {
@@ -719,35 +682,25 @@ function endShift() {
 
             showUndoButton(60);
 
-            fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`)
-                .then(r => r.json())
-                .then(geo => {
-                    const address = geo.display_name || `${lat}, ${lon}`;
-                    alert(
-                        `🔴 Смена завершена в ${endFormatted}\n` +
-                        `⏱ Отработано: ${workedText}\n\n` +
-                        `${motivation}\n\n` +
-                        `📍 Локация:\n${address}\n\n` +
-                        `🗺 Google Maps:\n${mapLink}`
-                    );
-                })
-                .catch(() => {
-                    alert(
-                        `🔴 Смена завершена в ${endFormatted}\n` +
-                        `⏱ Отработано: ${workedText}\n\n` +
-                        `${motivation}\n\n` +
-                        `📍 Координаты: ${lat}, ${lon}\n\n` +
-                        `🗺 Google Maps:\n${mapLink}`
-                    );
-                });
-
-            tg.sendData(JSON.stringify({
+            sendToServer({
                 type: "SHIFT_ENDED",
                 user: user?.first_name,
                 time: endFormatted,
                 worked: workedText,
-                latitude: lat, longitude: lon, map: mapLink
-            }));
+                latitude: lat,
+                longitude: lon,
+                map: mapLink
+            });
+
+            fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`)
+                .then(r => r.json())
+                .then(geo => {
+                    const address = geo.display_name || `${lat}, ${lon}`;
+                    alert(`🔴 Смена завершена в ${endFormatted}\n⏱ Отработано: ${workedText}\n\n${motivation}\n\n📍 Локация:\n${address}\n\n🗺 Google Maps:\n${mapLink}`);
+                })
+                .catch(() => {
+                    alert(`🔴 Смена завершена в ${endFormatted}\n⏱ Отработано: ${workedText}\n\n${motivation}\n\n📍 Координаты: ${lat}, ${lon}\n\n🗺 Google Maps:\n${mapLink}`);
+                });
 
             localStorage.removeItem("shiftActive");
             localStorage.removeItem("shiftStart");
