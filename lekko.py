@@ -89,14 +89,33 @@ async def start(message: Message):
     )
 
 
-# HTTP endpoint — принимает данные от WebApp напрямую
+async def handle_options(request):
+    return web.Response(
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+        }
+    )
+
+
 async def handle_event(request):
+    # CORS headers
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+    }
+
+    if request.method == "OPTIONS":
+        return web.Response(headers=headers)
+
     try:
         data = await request.json()
         print(f"📩 HTTP данные: {data}")
     except Exception as e:
         print(f"❌ Ошибка JSON: {e}")
-        return web.Response(status=400, text="Bad JSON")
+        return web.Response(status=400, text="Bad JSON", headers=headers)
 
     event = data.get("type")
     username = data.get("user") or "Сотрудник"
@@ -105,7 +124,7 @@ async def handle_event(request):
     lon = data.get("longitude")
 
     if not user_id:
-        return web.Response(status=400, text="No chat_id")
+        return web.Response(status=400, text="No chat_id", headers=headers)
 
     try:
         if event == "SHIFT_STARTED":
@@ -126,7 +145,11 @@ async def handle_event(request):
                 parse_mode="Markdown"
             )
             if lat and lon:
-                await bot.send_location(chat_id=int(user_id), latitude=float(lat), longitude=float(lon))
+                await bot.send_location(
+                    chat_id=int(user_id),
+                    latitude=float(lat),
+                    longitude=float(lon)
+                )
 
         elif event == "SHIFT_ENDED":
             async with db_pool.acquire() as conn:
@@ -143,7 +166,11 @@ async def handle_event(request):
                 parse_mode="Markdown"
             )
             if lat and lon:
-                await bot.send_location(chat_id=int(user_id), latitude=float(lat), longitude=float(lon))
+                await bot.send_location(
+                    chat_id=int(user_id),
+                    latitude=float(lat),
+                    longitude=float(lon)
+                )
 
         elif event == "PHARMACY_CREATED":
             p = data.get("data", {})
@@ -173,9 +200,9 @@ async def handle_event(request):
 
     except Exception as e:
         print(f"❌ Ошибка обработки: {e}")
-        return web.Response(status=500, text=str(e))
+        return web.Response(status=500, text=str(e), headers=headers)
 
-    return web.json_response({"ok": True})
+    return web.json_response({"ok": True}, headers=headers)
 
 
 async def main():
@@ -183,6 +210,7 @@ async def main():
 
     app_web = web.Application()
     app_web.router.add_post("/event", handle_event)
+    app_web.router.add_options("/event", handle_options)
 
     runner = web.AppRunner(app_web)
     await runner.setup()
