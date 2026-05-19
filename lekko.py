@@ -10,6 +10,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, W
 TOKEN = os.environ.get("BOT_TOKEN", "8492885588:AAFPmxL_u4elT0Z5qHVuP0-FicEjPpkp-Xc")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 WEB_APP_URL = "https://fascinating-medovik-cbeefa.netlify.app"
+ADMIN_ID = 7526702987
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -89,6 +90,15 @@ async def start(message: Message):
     )
 
 
+async def notify_admin(text, lat=None, lon=None):
+    try:
+        await bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="Markdown")
+        if lat and lon:
+            await bot.send_location(chat_id=ADMIN_ID, latitude=float(lat), longitude=float(lon))
+    except Exception as e:
+        print(f"❌ Ошибка отправки админу: {e}")
+
+
 async def handle_options(request):
     return web.Response(
         headers={
@@ -100,7 +110,6 @@ async def handle_options(request):
 
 
 async def handle_event(request):
-    # CORS headers
     headers = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -139,17 +148,19 @@ async def handle_event(request):
                     float(lon) if lon else None,
                     data.get("map"))
 
-            await bot.send_message(
-                chat_id=int(user_id),
-                text=f"🟢 *{username} вышел на смену*\n🕒 Время: {data.get('time')}",
-                parse_mode="Markdown"
+            text = (
+                f"🟢 *{username} вышел на смену*\n"
+                f"🕒 Время: {data.get('time')}"
             )
+
+            # Сотруднику
+            await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown")
             if lat and lon:
-                await bot.send_location(
-                    chat_id=int(user_id),
-                    latitude=float(lat),
-                    longitude=float(lon)
-                )
+                await bot.send_location(chat_id=int(user_id), latitude=float(lat), longitude=float(lon))
+
+            # Админу
+            if int(user_id) != ADMIN_ID:
+                await notify_admin(text, lat, lon)
 
         elif event == "SHIFT_ENDED":
             async with db_pool.acquire() as conn:
@@ -160,17 +171,20 @@ async def handle_event(request):
                     LIMIT 1
                 """, data.get("time"), data.get("worked"), int(user_id))
 
-            await bot.send_message(
-                chat_id=int(user_id),
-                text=f"🔴 *{username} завершил смену*\n🕒 {data.get('time')}\n⏱ {data.get('worked')}",
-                parse_mode="Markdown"
+            text = (
+                f"🔴 *{username} завершил смену*\n"
+                f"🕒 Время: {data.get('time')}\n"
+                f"⏱ Отработано: {data.get('worked')}"
             )
+
+            # Сотруднику
+            await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown")
             if lat and lon:
-                await bot.send_location(
-                    chat_id=int(user_id),
-                    latitude=float(lat),
-                    longitude=float(lon)
-                )
+                await bot.send_location(chat_id=int(user_id), latitude=float(lat), longitude=float(lon))
+
+            # Админу
+            if int(user_id) != ADMIN_ID:
+                await notify_admin(text, lat, lon)
 
         elif event == "PHARMACY_CREATED":
             p = data.get("data", {})
@@ -184,19 +198,23 @@ async def handle_event(request):
                     p.get("software"), p.get("status"), p.get("comment"),
                     p.get("photosCount", 0))
 
-            await bot.send_message(
-                chat_id=int(user_id),
-                text=(
-                    f"🏥 *Новая аптека*\n"
-                    f"🏪 {p.get('name')}\n"
-                    f"👤 {p.get('lprName')}\n"
-                    f"📞 {p.get('lprPhone')}\n"
-                    f"💻 {p.get('software')}\n"
-                    f"📊 {p.get('status') or '—'}\n"
-                    f"💬 {p.get('comment') or '—'}"
-                ),
-                parse_mode="Markdown"
+            text = (
+                f"🏥 *Новая аптека от {username}*\n"
+                f"🏪 Название: {p.get('name')}\n"
+                f"👤 ЛПР: {p.get('lprName')}\n"
+                f"📞 Телефон: {p.get('lprPhone')}\n"
+                f"💻 Программа: {p.get('software')}\n"
+                f"📊 Статус: {p.get('status') or '—'}\n"
+                f"💬 Комментарий: {p.get('comment') or '—'}\n"
+                f"📸 Фото: {p.get('photosCount')} шт."
             )
+
+            # Сотруднику
+            await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown")
+
+            # Админу
+            if int(user_id) != ADMIN_ID:
+                await notify_admin(text)
 
     except Exception as e:
         print(f"❌ Ошибка обработки: {e}")
