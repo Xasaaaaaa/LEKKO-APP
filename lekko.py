@@ -153,12 +153,10 @@ async def handle_event(request):
                 f"🕒 Время: {data.get('time')}"
             )
 
-            # Сотруднику
             await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown")
             if lat and lon:
                 await bot.send_location(chat_id=int(user_id), latitude=float(lat), longitude=float(lon))
 
-            # Админу
             if int(user_id) != ADMIN_ID:
                 await notify_admin(text, lat, lon)
 
@@ -166,9 +164,12 @@ async def handle_event(request):
             async with db_pool.acquire() as conn:
                 await conn.execute("""
                     UPDATE shifts SET end_time=$1, worked=$2
-                    WHERE user_id=$3 AND end_time IS NULL
-                    ORDER BY created_at DESC
-                    LIMIT 1
+                    WHERE id = (
+                        SELECT id FROM shifts
+                        WHERE user_id=$3 AND end_time IS NULL
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    )
                 """, data.get("time"), data.get("worked"), int(user_id))
 
             text = (
@@ -177,12 +178,10 @@ async def handle_event(request):
                 f"⏱ Отработано: {data.get('worked')}"
             )
 
-            # Сотруднику
             await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown")
             if lat and lon:
                 await bot.send_location(chat_id=int(user_id), latitude=float(lat), longitude=float(lon))
 
-            # Админу
             if int(user_id) != ADMIN_ID:
                 await notify_admin(text, lat, lon)
 
@@ -209,10 +208,8 @@ async def handle_event(request):
                 f"📸 Фото: {p.get('photosCount')} шт."
             )
 
-            # Сотруднику
             await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown")
 
-            # Админу
             if int(user_id) != ADMIN_ID:
                 await notify_admin(text)
 
