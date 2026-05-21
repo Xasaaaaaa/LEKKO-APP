@@ -6,12 +6,13 @@ import asyncpg
 import aiohttp
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from datetime import datetime, timedelta
 
 TOKEN = os.environ.get("BOT_TOKEN", "8492885588:AAFPmxL_u4elT0Z5qHVuP0-FicEjPpkp-Xc")
 DATABASE_URL = os.environ.get("DATABASE_URL")
-WEB_APP_URL = "https://vocal-toffee-d5d45b.netlify.app"
+WEB_APP_URL = "https://fascinating-medovik-cbeefa.netlify.app"
 ADMIN_ID = 7526702987
 
 bot = Bot(token=TOKEN)
@@ -120,6 +121,170 @@ async def start(message: Message):
         "Добро пожаловать в LEKKO APP",
         reply_markup=kb
     )
+
+
+# =========================
+# /stats — сводка за сегодня
+# =========================
+
+@dp.message(Command("stats"))
+async def cmd_stats(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас нет доступа к этой команде.")
+        return
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    async with db_pool.acquire() as conn:
+        active = await conn.fetch("""
+            SELECT first_name, start_time FROM shifts
+            WHERE date=$1 AND end_time IS NULL
+        """, today)
+
+        done = await conn.fetch("""
+            SELECT first_name, start_time, end_time, worked, distance_km
+            FROM shifts
+            WHERE date=$1 AND end_time IS NOT NULL
+        """, today)
+
+        pharmacies = await conn.fetch("""
+            SELECT first_name, name, status FROM pharmacies
+            WHERE DATE(created_at) = $1::DATE
+        """, today)
+
+    text = f"📊 *Сводка за сегодня* ({datetime.now().strftime('%d.%m.%Y')})\n\n"
+
+    if active:
+        text += f"🟢 *Сейчас на смене ({len(active)}):*\n"
+        for s in active:
+            text += f"  • {s['first_name']} — с {s['start_time']}\n"
+        text += "\n"
+    else:
+        text += "🟢 *Сейчас на смене:* никого\n\n"
+
+    if done:
+        text += f"✅ *Завершили смену ({len(done)}):*\n"
+        for s in done:
+            dist = f" | 📍 {s['distance_km']} км" if s['distance_km'] else ""
+            text += f"  • {s['first_name']} — {s['start_time']}–{s['end_time']} ({s['worked']}{dist})\n"
+        text += "\n"
+    else:
+        text += "✅ *Завершили смену:* никого\n\n"
+
+    if pharmacies:
+        text += f"🏥 *Аптек добавлено: {len(pharmacies)}*\n"
+        for p in pharmacies:
+            status_emoji = {
+                "cold": "❄️", "inwork": "🔄",
+                "deal": "✅", "decline": "❌"
+            }.get(p['status'], "📋")
+            text += f"  • {p['first_name']}: {p['name']} {status_emoji}\n"
+    else:
+        text += "🏥 *Аптек добавлено:* 0"
+
+    await message.answer(text, parse_mode="Markdown")
+
+
+# =========================
+# /report — отчёт за неделю
+# =========================
+
+@dp.message(Command("report"))
+async def cmd_report(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас нет доступа к этой команде.")
+        return
+
+    await send_weekly_report()
+
+
+# =========================
+# АВТООТЧЁТ — пятница 18:30
+# =========================
+
+async def send_weekly_report():
+    week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    async with db_pool.acquire() as conn:
+        staff = await conn.fetch("""
+            SELECT
+                first_name,
+                COUNT(*) as shifts_count,
+                COUNT(CASE WHEN end_time IS NOT NULL THEN 1 END) as completed,
+                SUM(CASE WHEN distance_km IS NOT NULL THEN distance_km ELSE 0 END) as total_distance
+            FROM shifts
+            WHERE date >= $1 AND date <= $2
+            GROUP BY first_name
+            ORDER BY shifts_count DESC
+        """, week_ago, today)
+
+        pharma = await conn.fetch("""
+            SELECT
+                first_name,
+                COUNT(*) as total,
+                COUNT(CASE WHEN status='deal' THEN 1 END) as deals,
+                COUNT(CASE WHEN status='decline' THEN 1 END) as declines,
+                COUNT(CASE WHEN status='inwork' THEN 1 END) as inwork,
+                COUNT(CASE WHEN status='cold' THEN 1 END) as cold
+            FROM pharmacies
+            WHERE DATE(created_at) >= $1::DATE AND DATE(created_at) <= $2::DATE
+            GROUP BY first_name
+            ORDER BY total DESC
+        """, week_ago, today)
+
+    pharma_dict = {p['first_name']: p for p in pharma}
+
+    text = (
+        f"📈 *Еженедельный отчёт*\n"
+        f"({(datetime.now() - timedelta(days=7)).strftime('%d.%m')} — "
+        f"{datetime.now().strftime('%d.%m.%Y')})\n\n"
+    )
+
+    if not staff:
+        text += "Нет данных за этот период."
+        await bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="Markdown")
+        return
+
+    for i, s in enumerate(staff, 1):
+        name = s['first_name']
+        dist = f" | 📍 {round(s['total_distance'], 1)} км" if s['total_distance'] else ""
+        text += f"{i}. *{name}*\n"
+        text += f"   🕒 Смен: {s['shifts_count']} (завершено: {s['completed']}{dist})\n"
+
+        p = pharma_dict.get(name)
+        if p:
+            text += (
+                f"   🏥 Аптек: {p['total']} "
+                f"(✅{p['deals']} ❌{p['declines']} 🔄{p['inwork']} ❄️{p['cold']})\n"
+            )
+        else:
+            text += f"   🏥 Аптек: 0\n"
+        text += "\n"
+
+    total_shifts = sum(s['shifts_count'] for s in staff)
+    total_pharma = sum(p['total'] for p in pharma)
+    total_deals  = sum(p['deals'] for p in pharma)
+
+    text += (
+        f"📊 *Итого за неделю:*\n"
+        f"   Смен: {total_shifts}\n"
+        f"   Аптек: {total_pharma}\n"
+        f"   Сделок: {total_deals}\n"
+    )
+
+    await bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="Markdown")
+    print("✅ Еженедельный отчёт отправлен")
+
+
+async def scheduler():
+    while True:
+        now = datetime.now()
+        # Пятница (weekday=4), 18:30
+        if now.weekday() == 4 and now.hour == 18 and now.minute == 30:
+            await send_weekly_report()
+            await asyncio.sleep(60)
+        await asyncio.sleep(30)
 
 
 async def notify_admin(text, lat=None, lon=None):
@@ -296,7 +461,11 @@ async def main():
     await site.start()
 
     print("✅ Сервер запущен")
-    await dp.start_polling(bot)
+
+    await asyncio.gather(
+        dp.start_polling(bot),
+        scheduler()
+    )
 
 
 if __name__ == "__main__":

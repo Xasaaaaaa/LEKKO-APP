@@ -422,7 +422,8 @@ function renderProfile() {
 
         <div style="background:#1e293b;border-radius:16px;padding:16px;margin-top:12px;text-align:center;">
             <div style="font-size:32px;font-weight:bold;color:#f59e0b;">🔥 ${s.streak}</div>
-            <div style="font-size:13px;color:#94a3b8;margin-top:4px;">Дней подряд на работе</div>
+            <div style="font-size:13px;color:#94a3b8;margin-top:4px;">Дней подряд 
+                на работе</div>
         </div>
 
         <div style="background:#1e293b;border-radius:16px;padding:16px;margin-top:12px;font-size:14px;color:#94a3b8;line-height:1.8;">
