@@ -133,23 +133,23 @@ async def cmd_stats(message: Message):
         await message.answer("❌ У вас нет доступа к этой команде.")
         return
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now().date()
 
     async with db_pool.acquire() as conn:
         active = await conn.fetch("""
             SELECT first_name, start_time FROM shifts
-            WHERE date=$1 AND end_time IS NULL
-        """, today)
+            WHERE date=$1::TEXT AND end_time IS NULL
+        """, str(today))
 
         done = await conn.fetch("""
             SELECT first_name, start_time, end_time, worked, distance_km
             FROM shifts
-            WHERE date=$1 AND end_time IS NOT NULL
-        """, today)
+            WHERE date=$1::TEXT AND end_time IS NOT NULL
+        """, str(today))
 
         pharmacies = await conn.fetch("""
             SELECT first_name, name, status FROM pharmacies
-            WHERE DATE(created_at) = $1::DATE
+            WHERE DATE(created_at) = $1
         """, today)
 
     text = f"📊 *Сводка за сегодня* ({datetime.now().strftime('%d.%m.%Y')})\n\n"
@@ -184,7 +184,6 @@ async def cmd_stats(message: Message):
 
     await message.answer(text, parse_mode="Markdown")
 
-
 # =========================
 # /report — отчёт за неделю
 # =========================
@@ -203,35 +202,35 @@ async def cmd_report(message: Message):
 # =========================
 
 async def send_weekly_report():
-    week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-    today = datetime.now().strftime("%Y-%m-%d")
+    week_ago = (datetime.now() - timedelta(days=7)).date()
+    today = datetime.now().date()
 
     async with db_pool.acquire() as conn:
         staff = await conn.fetch("""
-            SELECT
-                first_name,
-                COUNT(*) as shifts_count,
-                COUNT(CASE WHEN end_time IS NOT NULL THEN 1 END) as completed,
-                SUM(CASE WHEN distance_km IS NOT NULL THEN distance_km ELSE 0 END) as total_distance
-            FROM shifts
-            WHERE date >= $1 AND date <= $2
-            GROUP BY first_name
-            ORDER BY shifts_count DESC
-        """, week_ago, today)
+        SELECT
+            first_name,
+            COUNT(*) as shifts_count,
+            COUNT(CASE WHEN end_time IS NOT NULL THEN 1 END) as completed,
+            SUM(CASE WHEN distance_km IS NOT NULL THEN distance_km ELSE 0 END) as total_distance
+        FROM shifts
+        WHERE date >= $1::TEXT AND date <= $2::TEXT
+        GROUP BY first_name
+        ORDER BY shifts_count DESC
+    """, str(week_ago), str(today))
 
-        pharma = await conn.fetch("""
-            SELECT
-                first_name,
-                COUNT(*) as total,
-                COUNT(CASE WHEN status='deal' THEN 1 END) as deals,
-                COUNT(CASE WHEN status='decline' THEN 1 END) as declines,
-                COUNT(CASE WHEN status='inwork' THEN 1 END) as inwork,
-                COUNT(CASE WHEN status='cold' THEN 1 END) as cold
-            FROM pharmacies
-            WHERE DATE(created_at) >= $1::DATE AND DATE(created_at) <= $2::DATE
-            GROUP BY first_name
-            ORDER BY total DESC
-        """, week_ago, today)
+    pharma = await conn.fetch("""
+        SELECT
+            first_name,
+            COUNT(*) as total,
+            COUNT(CASE WHEN status='deal' THEN 1 END) as deals,
+            COUNT(CASE WHEN status='decline' THEN 1 END) as declines,
+            COUNT(CASE WHEN status='inwork' THEN 1 END) as inwork,
+            COUNT(CASE WHEN status='cold' THEN 1 END) as cold
+        FROM pharmacies
+        WHERE DATE(created_at) >= $1 AND DATE(created_at) <= $2
+        GROUP BY first_name
+        ORDER BY total DESC
+    """, week_ago, today)
 
     pharma_dict = {p['first_name']: p for p in pharma}
 
