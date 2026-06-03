@@ -1,356 +1,417 @@
 <!DOCTYPE html>
-
 <html lang="ru">
-
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LEKKO APP</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
 
-    <meta charset="UTF-8">
+:root {
+    --bg:        #080f1a;
+    --bg2:       #0d1829;
+    --card:      #111e30;
+    --card2:     #152238;
+    --border:    rgba(32,210,180,0.15);
+    --teal:      #20d2b4;
+    --teal2:     #16b89d;
+    --teal3:     #0d8a77;
+    --green:     #2edd8e;
+    --accent:    #38f0c8;
+    --muted:     #7a9ab8;
+    --white:     #eef6f8;
+    --danger:    #ff4f6d;
+    --warn:      #ffb547;
+}
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+* { margin:0; padding:0; box-sizing:border-box; }
 
-    <title>LEKKO APP</title>
+body {
+    background: var(--bg);
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
 
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 60% 50% at 80% 10%, rgba(32,210,180,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 40% at 10% 80%, rgba(46,221,142,0.06) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+}
 
-    <style>
+#dashboard, #pharmacy, #shift, #profile, #history {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 20px 16px 32px;
+    animation: fadeUp 0.35s ease both;
+}
 
-        * {
-            margin:0;
-            padding:0;
-            box-sizing:border-box;
-        }
+@keyframes fadeUp {
+    from { opacity:0; transform:translateY(18px); }
+    to   { opacity:1; transform:translateY(0); }
+}
 
-        body {
-            background:#0f172a;
-            color:white;
-            font-family:Arial,sans-serif;
-            padding:15px;
-        }
+.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    padding-top: 8px;
+}
 
-        #dashboard,
-        #pharmacy,
-        #shift,
-        #profile,
-        #history {
-            width:100%;
-            max-width:500px;
-            margin:0 auto;
-        }
+.logo-icon {
+    width: 38px;
+    height: 38px;
+    background: linear-gradient(135deg, var(--teal), var(--green));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 0 20px rgba(32,210,180,0.3);
+}
 
-        h1 {
-            text-align:center;
-            margin-bottom:20px;
-            font-size:32px;
-        }
+.app-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 26px;
+    background: linear-gradient(90deg, var(--accent), var(--green));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 1px;
+}
 
-        h2 {
-            margin-bottom:15px;
-        }
+.user-greeting {
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 24px;
+    font-weight: 300;
+}
 
-        p {
-            margin-top:10px;
-            margin-bottom:10px;
-        }
+.user-greeting b {
+    color: var(--white);
+    font-weight: 500;
+}
 
-        button {
-            width:100%;
-            min-height:55px;
-            border:none;
-            border-radius:14px;
-            background:#3b82f6;
-            color:white;
-            font-size:18px;
-            margin-top:12px;
-            cursor:pointer;
-        }
+.menu-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 8px;
+}
 
-        button:active {
-            transform:scale(0.98);
-        }
+.menu-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 22px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+}
 
-        input,
-        select,
-        textarea {
-            width:100%;
-            border:none;
-            border-radius:14px;
-            padding:14px 15px;
-            margin-top:12px;
-            background:#1e293b;
-            color:white;
-            font-size:16px;
-            font-family:Arial,sans-serif;
-            resize:none;
-        }
+.menu-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(32,210,180,0.06), transparent);
+    opacity: 0;
+    transition: opacity 0.25s;
+}
 
-        input,
-        select {
-            height:55px;
-            padding:0 15px;
-        }
+.menu-card:active { transform: scale(0.96); }
+.menu-card:active::before { opacity: 1; }
 
-        #photoContainer {
-            display:flex;
-            flex-wrap:wrap;
-            gap:10px;
-            margin-top:15px;
-        }
+.menu-card .icon { font-size: 30px; line-height: 1; }
 
-        #photoContainer img {
-            width:90px;
-            height:90px;
-            border-radius:12px;
-            object-fit:cover;
-        }
+.menu-card .label {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--white);
+    text-align: center;
+    letter-spacing: 0.3px;
+}
 
-        .back-btn {
-            background:#1e293b;
-        }
+.menu-card.accent {
+    background: linear-gradient(135deg, rgba(32,210,180,0.12), rgba(46,221,142,0.08));
+    border-color: rgba(32,210,180,0.3);
+}
 
-        .shift-card {
-            background:#1e293b;
-            padding:18px;
-            border-radius:14px;
-            margin-top:15px;
-            line-height:1.8;
-            font-size:16px;
-        }
+.section-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--white);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
 
-        #shiftStatus {
-            background:#1e293b;
-            border-radius:14px;
-            padding:16px;
-            font-size:16px;
-            line-height:1.8;
-            margin-top:12px;
-            display:none;
-        }
+.section-title span {
+    background: linear-gradient(90deg, var(--teal), var(--green));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
 
-        #shiftTimer {
-            text-align:center;
-            font-size:22px;
-            margin-top:12px;
-            color:#60a5fa;
-            min-height:32px;
-        }
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--teal);
+    font-size: 14px;
+    font-family: 'DM Sans', sans-serif;
+    padding: 0 16px;
+    min-height: 40px;
+    width: auto;
+    margin-bottom: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
 
-        @media(max-width:480px) {
+.back-btn:hover, .back-btn:active {
+    background: rgba(32,210,180,0.08);
+    border-color: var(--teal);
+    transform: none;
+}
 
-            body {
-                padding:12px;
-            }
+input, select, textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-top: 10px;
+    background: var(--card);
+    color: var(--white);
+    font-size: 15px;
+    font-family: 'DM Sans', sans-serif;
+    resize: none;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
 
-            h1 {
-                font-size:28px;
-            }
+input, select { height: 54px; padding: 0 16px; }
 
-            button {
-                min-height:60px;
-                font-size:17px;
-            }
+input:focus, select:focus, textarea:focus {
+    border-color: var(--teal);
+    box-shadow: 0 0 0 3px rgba(32,210,180,0.1);
+}
 
-            input,
-            select {
-                height:58px;
-                font-size:16px;
-            }
-        }
+select option { background: #111e30; }
 
-    </style>
+button {
+    width: 100%;
+    min-height: 54px;
+    border: none;
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--teal), var(--teal2));
+    color: #080f1a;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: 'Syne', sans-serif;
+    margin-top: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+}
 
+button:active { transform: scale(0.97); filter: brightness(0.9); }
+
+.btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 14px;
+    min-height: 42px;
+}
+
+.btn-ghost:hover { border-color: var(--teal); color: var(--teal); }
+
+.btn-start {
+    background: linear-gradient(135deg, #2edd8e, #20b870);
+    color: #080f1a;
+}
+
+.btn-end {
+    background: linear-gradient(135deg, #ff4f6d, #c93050);
+    color: white;
+}
+
+.info-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 18px;
+    margin-top: 12px;
+    line-height: 1.9;
+    font-size: 15px;
+}
+
+.info-card p { color: var(--muted); margin: 0; }
+.info-card p b { color: var(--white); }
+
+#shiftStatus {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 18px;
+    font-size: 15px;
+    line-height: 1.9;
+    margin-top: 12px;
+    display: none;
+}
+
+#shiftTimer {
+    text-align: center;
+    font-family: 'Syne', sans-serif;
+    font-size: 36px;
+    font-weight: 700;
+    margin-top: 16px;
+    min-height: 48px;
+    background: linear-gradient(90deg, var(--teal), var(--green));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 2px;
+}
+
+#photoContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+#photoContainer img {
+    width: 88px;
+    height: 88px;
+    border-radius: 14px;
+    object-fit: cover;
+    border: 2px solid var(--border);
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--teal3); border-radius: 2px; }
+
+@media(max-width:480px) {
+    body { font-size: 15px; }
+    #shiftTimer { font-size: 30px; }
+}
+
+</style>
 </head>
-
 <body>
 
-    <!-- DASHBOARD -->
-
-    <div id="dashboard">
-
-        <h1>LEKKO APP</h1>
-
-        <p id="user"></p>
-
-        <button onclick="openPage('pharmacy')">
-            ➕ Аптека
-        </button>
-
-        <button onclick="openPage('shift')">
-            🕒 Смена
-        </button>
-
-        <button onclick="openPage('history')">
-            📋 История смен
-        </button>
-
-        <button onclick="openPage('profile')">
-            👤 Профиль
-        </button>
-
+<!-- DASHBOARD -->
+<div id="dashboard">
+    <div class="app-header">
+        <div class="logo-icon">💊</div>
+        <div class="app-title">LEKKO</div>
     </div>
-
-    <!-- АПТЕКА -->
-
-    <div id="pharmacy" style="display:none;">
-
-        <button class="back-btn" onclick="back()">
-            ← Назад
-        </button>
-
-        <input id="name"
-               placeholder="Название аптеки">
-
-        <input id="lpr_name"
-               placeholder="ЛПР (имя)">
-
-        <input type="tel"
-               id="lpr_phone"
-               placeholder="+998 (__) ___-__-__"
-               maxlength="19">
-
-        <select id="software"
-                onchange="toggleSoftwareInput()">
-
-            <option value="">
-                Выберите программу
-            </option>
-
-            <option value="OSON APTEKA">
-                OSON APTEKA
-            </option>
-
-            <option value="FOM">
-                FOM
-            </option>
-
-            <option value="ABU">
-                ABU
-            </option>
-
-            <option value="other">
-                ➕ Другое
-            </option>
-
-        </select>
-
-        <input id="software_custom"
-               placeholder="Введите свою программу"
-               style="display:none;">
-
-        <select id="pharmacy_status">
-
-            <option value="">
-                Статус контакта
-            </option>
-
-            <option value="cold">
-                ❄️ Холодный контакт
-            </option>
-
-            <option value="inwork">
-                🔄 В работе
-            </option>
-
-            <option value="deal">
-                ✅ Договорились
-            </option>
-
-            <option value="decline">
-                ❌ Отказ
-            </option>
-
-        </select>
-
-        <textarea
-            id="contact_comment"
-            placeholder="💬 Комментарий к контакту..."
-            rows="3"
-        ></textarea>
-
-        <button onclick="openFilePicker()">
-            📸 Добавить фото
-        </button>
-
-        <input type="file"
-               id="photo"
-               multiple
-               style="display:none"
-               onchange="previewPhotos()">
-
-        <div id="photoContainer"></div>
-
-        <button onclick="clearPhotos()">
-            🗑 Удалить фото
-        </button>
-
-        <button onclick="savePharmacy()">
-            💾 Сохранить
-        </button>
-
-    </div>
-
-    <!-- СМЕНА -->
-
-    <div id="shift" style="display:none;">
-
-        <button class="back-btn" onclick="back()">
-            ← Назад
-        </button>
-
-        <h2>Смена</h2>
-
-        <div class="shift-card">
-
-            <p>🕘 Первая смена: 09:00 - 13:00</p>
-
-            <p>🕑 Вторая смена: 14:00 - 18:00</p>
-
+    <p class="user-greeting" id="user">Загрузка...</p>
+    <div class="menu-grid">
+        <div class="menu-card accent" onclick="openPage('pharmacy')">
+            <div class="icon">🏥</div>
+            <div class="label">Аптека</div>
         </div>
-
-        <div id="shiftTimer"></div>
-
-        <div id="shiftStatus"></div>
-
-        <div id="dailyPlan"></div>
-
-        <button onclick="startShift()">
-            🟢 Начать смену
-        </button>
-
-        <button onclick="endShift()">
-            🔴 Завершить смену
-        </button>
-
+        <div class="menu-card" onclick="openPage('shift')">
+            <div class="icon">🕒</div>
+            <div class="label">Смена</div>
+        </div>
+        <div class="menu-card" onclick="openPage('history')">
+            <div class="icon">📋</div>
+            <div class="label">История</div>
+        </div>
+        <div class="menu-card" onclick="openPage('profile')">
+            <div class="icon">👤</div>
+            <div class="label">Профиль</div>
+        </div>
     </div>
+</div>
 
-    <!-- ИСТОРИЯ -->
 
-    <div id="history" style="display:none;">
+<!-- АПТЕКА -->
+<div id="pharmacy" style="display:none;">
+    <button class="back-btn" onclick="back()">← Назад</button>
+    <div class="section-title"><span>🏥</span> Новая аптека</div>
+    <input id="name" placeholder="Название аптеки">
+    <input id="lpr_name" placeholder="ЛПР (имя)">
+    <input type="tel" id="lpr_phone" placeholder="+998 (__) ___-__-__" maxlength="19">
+    <select id="software" onchange="toggleSoftwareInput()">
+        <option value="">Выберите программу</option>
+        <option value="OSON APTEKA">OSON APTEKA</option>
+        <option value="FOM">FOM</option>
+        <option value="ABU">ABU</option>
+        <option value="other">➕ Другое</option>
+    </select>
+    <input id="software_custom" placeholder="Введите свою программу" style="display:none;">
+    <select id="pharmacy_status">
+        <option value="">Статус контакта</option>
+        <option value="cold">❄️ Холодный контакт</option>
+        <option value="inwork">🔄 В работе</option>
+        <option value="deal">✅ Договорились</option>
+        <option value="decline">❌ Отказ</option>
+    </select>
+    <textarea id="contact_comment" placeholder="💬 Комментарий к контакту..." rows="3"></textarea>
+    <button onclick="openFilePicker()">📸 Добавить фото</button>
+    <input type="file" id="photo" multiple style="display:none" onchange="previewPhotos()">
+    <div id="photoContainer"></div>
+    <button class="btn-ghost" onclick="clearPhotos()" style="margin-top:10px;">🗑 Удалить фото</button>
+    <button onclick="savePharmacy()" style="margin-top:16px;">💾 Сохранить аптеку</button>
+</div>
 
-        <button class="back-btn" onclick="back()">
-            ← Назад
-        </button>
 
-        <h2>История смен</h2>
-
-        <div id="historyContent"></div>
-
+<!-- СМЕНА -->
+<div id="shift" style="display:none;">
+    <button class="back-btn" onclick="back()">← Назад</button>
+    <div class="section-title"><span>🕒</span> Смена</div>
+    <div class="info-card">
+        <p>🕘 Первая смена: <b>09:00 – 13:00</b></p>
+        <p>🕑 Вторая смена: <b>14:00 – 18:00</b></p>
     </div>
+    <div id="shiftTimer"></div>
+    <div id="shiftStatus"></div>
+    <div id="dailyPlan"></div>
+    <button class="btn-start" onclick="startShift()">🟢 Начать смену</button>
+    <button class="btn-end" onclick="endShift()">🔴 Завершить смену</button>
+</div>
 
-    <!-- ПРОФИЛЬ -->
 
-    <div id="profile" style="display:none;">
+<!-- ИСТОРИЯ -->
+<div id="history" style="display:none;">
+    <button class="back-btn" onclick="back()">← Назад</button>
+    <div class="section-title"><span>📋</span> История смен</div>
+    <div id="historyContent"></div>
+</div>
 
-        <button class="back-btn" onclick="back()">
-            ← Назад
-        </button>
 
-        <div id="profileContent"></div>
+<!-- ПРОФИЛЬ -->
+<div id="profile" style="display:none;">
+    <button class="back-btn" onclick="back()">← Назад</button>
+    <div id="profileContent"></div>
+</div>
 
-    </div>
-
-    <script src="app.js"></script>
-
+<script src="app.js"></script>
 </body>
-
 </html>

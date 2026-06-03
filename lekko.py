@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 
 TOKEN = os.environ.get("BOT_TOKEN", "8492885588:AAFPmxL_u4elT0Z5qHVuP0-FicEjPpkp-Xc")
 DATABASE_URL = os.environ.get("DATABASE_URL")
-WEB_APP_URL = "https://fascinating-medovik-cbeefa.netlify.app"
+WEB_APP_URL = "https://whimsical-cucurucho-0d97ee.netlify.app"
 ADMIN_ID = 7526702987
 
 bot = Bot(token=TOKEN)
