@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LEKKO APP</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap\" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 
 :root {
@@ -42,7 +42,6 @@ body {
     flex-direction: column;
 }
 
-/* Элементы интерфейса */
 .app-header {
     display: flex;
     align-items: center;
@@ -71,7 +70,6 @@ body {
     color: var(--white);
 }
 
-/* Сетка меню */
 .menu-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -107,7 +105,6 @@ body {
     color: var(--white);
 }
 
-/* Формы и кнопки */
 .section-title {
     font-family: 'Syne', sans-serif;
     font-weight: 700;
@@ -243,6 +240,7 @@ button:active {
 </head>
 <body>
 
+<!-- ГЛАВНОЕ МЕНЮ -->
 <div id="dashboard">
     <div class="app-header">
         <div class="logo-icon">💊</div>
@@ -273,35 +271,38 @@ button:active {
     </div>
 </div>
 
-
+<!-- АПТЕКА -->
 <div id="pharmacy" style="display:none;">
     <button class="back-btn" onclick="back()">← Назад</button>
     <div class="section-title"><span>🏥</span> Добавить аптеку</div>
     
     <input type="text" id="name" placeholder="Название аптеки">
     <input type="text" id="lpr_name" placeholder="ФИО ЛПР">
-    
     <input type="tel" id="lpr_phone" placeholder="+998 (__) ___-__-__" value="+998 ">
     
-    <select id="software" onchange="toggleSoftwareCustom()">
-        <option value="" disabled selected>💻 Программа автоматизации</option>
-        <option value="1С: Аптека">1С: Аптека</option>
-        <option value="БЭСТ">БЭСТ</option>
-        <option value="ИнфоАптека">ИнфоАптека</option>
+    <select id="software" onchange="toggleSoftwareInput()">
+        <option value="" disabled selected>💻 Какая программа используется?</option>
+        <option value="ABU">ABU</option>
+        <option value="LEKKO">LEKKO</option>
+        <option value="1C">1С</option>
+        <option value="SmartPharma">SmartPharma</option>
+        <option value="OSON">OSON</option>
+        <option value="FOM">FOM</option>
         <option value="Другая">Другая (ввести вручную)</option>
     </select>
-    <input type="text" id="software_custom" placeholder="Введите название программы" style="display:none">
     
+    <input type="text" id="software_custom" placeholder="Укажите название программы" style="display:none;">
+
     <div id="software_id_container" style="display: none;">
-        <input type="text" id="software_id" placeholder="🆔 Укажите ID программы в системе">
+        <input type="text" id="software_id" placeholder="🆔 Введите ID программы">
     </div>
 
     <select id="pharmacy_status">
-        <option value="">Статус контакта</option>
-        <option value="cold">❄️ Холодный контакт</option>
-        <option value="inwork">🔄 В работе</option>
-        <option value="deal">✅ Договорились</option>
-        <option value="decline">❌ Отказ</option>
+        <option value="" disabled selected>📊 Статус контакта</option>
+        <option value="cold">Холодный контакт</option>
+        <option value="inwork">В работе</option>
+        <option value="deal">Договорились</option>
+        <option value="decline">Отказ</option>
     </select>
     
     <textarea id="contact_comment" placeholder="Комментарий к контакту..." rows="3"></textarea>
@@ -312,7 +313,7 @@ button:active {
     <button onclick="savePharmacy()">💾 Сохранить аптеку</button>
 </div>
 
-
+<!-- СМЕНА -->
 <div id="shift" style="display:none;">
     <button class="back-btn" onclick="back()">← Назад</button>
     <div class="section-title"><span>🕒</span> Смена</div>
@@ -327,21 +328,21 @@ button:active {
     <button class="btn-end" onclick="endShift()">🔴 Завершить смену</button>
 </div>
 
-
+<!-- ИСТОРИЯ СМЕН -->
 <div id="history" style="display:none;">
     <button class="back-btn" onclick="back()">← Назад</button>
     <div class="section-title"><span>📋</span> История смен</div>
     <div id="historyList"></div>
 </div>
 
-
+<!-- ИСТОРИЯ АПТЕК -->
 <div id="pharmacy_history_page" style="display:none;">
     <button class="back-btn" onclick="back()">← Назад</button>
     <div class="section-title"><span>🏢</span> История аптек</div>
     <div id="pharmacyHistoryList"></div>
 </div>
 
-
+<!-- ПРОФИЛЬ -->
 <div id="profile" style="display:none;">
     <button class="back-btn" onclick="back()">← Назад</button>
     <div class="section-title"><span>👤</span> Профиль</div>

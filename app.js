@@ -80,24 +80,27 @@ function showToast(text) {
 // ЛОГИКА ОКНА АПТЕКИ
 // =========================
 
-function toggleSoftwareCustom() {
+function toggleSoftwareInput() {
     const s = document.getElementById("software").value;
     const sc = document.getElementById("software_custom");
     const idContainer = document.getElementById("software_id_container");
-    
+
     if (s === "Другая") {
-        sc.style.display = "block";
+        if (sc) sc.style.display = "block";
     } else {
-        sc.style.display = "none";
-        sc.value = "";
+        if (sc) {
+            sc.style.display = "none";
+            sc.value = "";
+        }
     }
 
-    if (s !== "") {
+    if (s === "LEKKO" || s === "ABU") {
         if (idContainer) idContainer.style.display = "block";
     } else {
         if (idContainer) {
             idContainer.style.display = "none";
-            document.getElementById("software_id").value = "";
+            const idInput = document.getElementById("software_id");
+            if (idInput) idInput.value = ""; 
         }
     }
 }
@@ -140,13 +143,15 @@ function clearPharmacyForm() {
     if (document.getElementById("lpr_name")) document.getElementById("lpr_name").value = "";
     if (document.getElementById("lpr_phone")) document.getElementById("lpr_phone").value = "+998 ";
     if (document.getElementById("software")) document.getElementById("software").value = "";
+    
     if (document.getElementById("software_custom")) {
         document.getElementById("software_custom").value = "";
         document.getElementById("software_custom").style.display = "none";
     }
     if (document.getElementById("software_id_container")) {
         document.getElementById("software_id_container").style.display = "none";
-        document.getElementById("software_id").value = "";
+        const idInput = document.getElementById("software_id");
+        if (idInput) idInput.value = "";
     }
     if (document.getElementById("pharmacy_status")) document.getElementById("pharmacy_status").value = "";
     if (document.getElementById("contact_comment")) document.getElementById("contact_comment").value = "";
