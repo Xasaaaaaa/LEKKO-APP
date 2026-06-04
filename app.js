@@ -38,6 +38,231 @@ function sendToServer(data) {
 
 
 // =========================
+// ТОСТ УВЕДОМЛЕНИЕ
+// =========================
+
+function showToast(message) {
+    const old = document.getElementById("toast");
+    if (old) old.remove();
+
+    const toast = document.createElement("div");
+    toast.id = "toast";
+    toast.innerHTML = message;
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background: linear-gradient(135deg, #20d2b4, #2edd8e);
+        color: #080f1a;
+        padding: 14px 24px;
+        border-radius: 16px;
+        font-family: 'Syne', sans-serif;
+        font-weight: 600;
+        font-size: 15px;
+        z-index: 9999;
+        opacity: 0;
+        transition: all 0.3s ease;
+        box-shadow: 0 8px 30px rgba(32,210,180,0.4);
+        white-space: nowrap;
+        max-width: 90vw;
+        text-align: center;
+    `;
+
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(() => {
+        toast.style.opacity = "1";
+        toast.style.transform = "translateX(-50%) translateY(0)";
+    });
+
+    setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateX(-50%) translateY(20px)";
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+
+// =========================
+// КАРТОЧКА СОХРАНЁННОЙ АПТЕКИ
+// =========================
+
+function showPharmacyCard(data) {
+    const old = document.getElementById("pharmacyModal");
+    if (old) old.remove();
+
+    const statusLabels = {
+        cold:    "❄️ Холодный контакт",
+        inwork:  "🔄 В работе",
+        deal:    "✅ Договорились",
+        decline: "❌ Отказ"
+    };
+
+    const overlay = document.createElement("div");
+    overlay.id = "pharmacyModal";
+    overlay.style.cssText = `
+        position: fixed;
+        inset: 0;
+        background: rgba(8,15,26,0.85);
+        backdrop-filter: blur(6px);
+        z-index: 9998;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        animation: fadeIn 0.25s ease;
+    `;
+
+    overlay.innerHTML = `
+        <div style="
+            background: #111e30;
+            border: 1px solid rgba(32,210,180,0.25);
+            border-radius: 24px;
+            padding: 28px 24px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(32,210,180,0.08);
+            animation: slideUp 0.3s ease;
+        ">
+            <div style="
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 20px;
+            ">
+                <div style="
+                    width: 44px; height: 44px;
+                    background: linear-gradient(135deg, #20d2b4, #2edd8e);
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 22px;
+                    flex-shrink: 0;
+                ">🏥</div>
+                <div>
+                    <div style="
+                        font-family: 'Syne', sans-serif;
+                        font-weight: 700;
+                        font-size: 17px;
+                        color: #eef6f8;
+                    ">${data.name}</div>
+                    <div style="
+                        font-size: 12px;
+                        color: #20d2b4;
+                        margin-top: 2px;
+                        font-weight: 500;
+                    ">✅ Аптека сохранена</div>
+                </div>
+            </div>
+
+            <div style="
+                background: #0d1829;
+                border-radius: 16px;
+                padding: 16px;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                font-size: 14px;
+            ">
+                ${data.lprName ? `
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="color:#7a9ab8;">👤 ЛПР</span>
+                    <span style="color:#eef6f8;font-weight:500;">${data.lprName}</span>
+                </div>` : ""}
+
+                ${data.lprPhone ? `
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="color:#7a9ab8;">📞 Телефон</span>
+                    <span style="color:#eef6f8;font-weight:500;">${data.lprPhone}</span>
+                </div>` : ""}
+
+                ${data.software ? `
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="color:#7a9ab8;">💻 Программа</span>
+                    <span style="color:#eef6f8;font-weight:500;">${data.software}</span>
+                </div>` : ""}
+
+                ${data.status ? `
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="color:#7a9ab8;">📊 Статус</span>
+                    <span style="color:#eef6f8;font-weight:500;">${statusLabels[data.status] || data.status}</span>
+                </div>` : ""}
+
+                ${data.comment ? `
+                <div style="
+                    padding-top: 10px;
+                    border-top: 1px solid rgba(32,210,180,0.1);
+                    color: #7a9ab8;
+                    font-size: 13px;
+                    line-height: 1.6;
+                ">💬 ${data.comment}</div>` : ""}
+
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="color:#7a9ab8;">📸 Фото</span>
+                    <span style="color:#eef6f8;font-weight:500;">${data.photosCount} шт.</span>
+                </div>
+            </div>
+
+            <button onclick="closePharmacyModal()" style="
+                margin-top: 16px;
+                width: 100%;
+                min-height: 50px;
+                background: linear-gradient(135deg, #20d2b4, #16b89d);
+                color: #080f1a;
+                border: none;
+                border-radius: 14px;
+                font-family: 'Syne', sans-serif;
+                font-weight: 700;
+                font-size: 15px;
+                cursor: pointer;
+                letter-spacing: 0.3px;
+            ">➕ Добавить ещё аптеку</button>
+
+            <button onclick="document.getElementById('pharmacyModal').remove(); back();" style="
+                margin-top: 8px;
+                width: 100%;
+                min-height: 44px;
+                background: transparent;
+                border: 1px solid rgba(32,210,180,0.2);
+                color: #7a9ab8;
+                border-radius: 14px;
+                font-family: 'DM Sans', sans-serif;
+                font-size: 14px;
+                cursor: pointer;
+            ">← На главную</button>
+        </div>
+
+        <style>
+            @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+            @keyframes slideUp { from { transform:translateY(30px);opacity:0; } to { transform:translateY(0);opacity:1; } }
+        </style>
+    `;
+
+    document.body.appendChild(overlay);
+}
+
+function closePharmacyModal() {
+    const modal = document.getElementById("pharmacyModal");
+    if (modal) modal.remove();
+    clearPharmacyForm();
+}
+
+function clearPharmacyForm() {
+    document.getElementById("name").value = "";
+    document.getElementById("lpr_name").value = "";
+    document.getElementById("lpr_phone").value = "";
+    document.getElementById("software").value = "";
+    document.getElementById("software_custom").value = "";
+    document.getElementById("software_custom").style.display = "none";
+    document.getElementById("pharmacy_status").value = "";
+    document.getElementById("contact_comment").value = "";
+    clearPhotos();
+}
+
+
+// =========================
 // АВАТАРКА
 // =========================
 
@@ -196,7 +421,7 @@ function startShiftTimer() {
         const m = Math.floor((elapsed % 3600000) / 60000);
         const s = Math.floor((elapsed % 60000) / 1000);
         timerEl.innerHTML =
-            `⏱ <b>${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}</b>`;
+            `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
     }, 1000);
 }
 
@@ -238,27 +463,27 @@ function renderDailyPlan() {
 
     if (plan === 0) {
         el.innerHTML = `
-            <div style="margin-top:12px;background:#1e293b;border-radius:14px;padding:16px;">
-                <div style="font-size:14px;color:#94a3b8;margin-bottom:8px;">🎯 План на день</div>
+            <div style="margin-top:12px;background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;">
+                <div style="font-size:14px;color:#7a9ab8;margin-bottom:8px;">🎯 План на день</div>
                 <input id="planInput" type="number" placeholder="Сколько аптек планируете посетить?" style="margin-top:0;">
                 <button onclick="savePlan()" style="min-height:44px;font-size:15px;margin-top:8px;">Сохранить план</button>
             </div>`;
     } else {
         const pct = Math.min(100, Math.round((fact / plan) * 100));
         el.innerHTML = `
-            <div style="margin-top:12px;background:#1e293b;border-radius:14px;padding:16px;">
-                <div style="font-size:14px;color:#94a3b8;margin-bottom:10px;">🎯 План на день</div>
+            <div style="margin-top:12px;background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;">
+                <div style="font-size:14px;color:#7a9ab8;margin-bottom:10px;">🎯 План на день</div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
                     <span>Факт: <b>${fact}</b></span>
                     <span>План: <b>${plan}</b></span>
                 </div>
-                <div style="background:#0f172a;border-radius:8px;height:10px;overflow:hidden;">
-                    <div style="background:${pct>=100?"#22c55e":"#3b82f6"};width:${pct}%;height:100%;border-radius:8px;transition:width 0.4s;"></div>
+                <div style="background:#080f1a;border-radius:8px;height:10px;overflow:hidden;">
+                    <div style="background:${pct>=100?"#2edd8e":"#20d2b4"};width:${pct}%;height:100%;border-radius:8px;transition:width 0.4s;"></div>
                 </div>
-                <div style="font-size:13px;color:#94a3b8;margin-top:6px;text-align:right;">
+                <div style="font-size:13px;color:#7a9ab8;margin-top:6px;text-align:right;">
                     ${pct}% выполнено ${pct >= 100 ? "🎉" : ""}
                 </div>
-                <button onclick="resetPlan()" style="min-height:36px;font-size:13px;margin-top:8px;background:#0f172a;color:#94a3b8;">
+                <button onclick="resetPlan()" style="min-height:36px;font-size:13px;margin-top:8px;background:transparent;border:1px solid rgba(32,210,180,0.15);color:#7a9ab8;">
                     Сбросить план
                 </button>
             </div>`;
@@ -267,7 +492,7 @@ function renderDailyPlan() {
 
 function savePlan() {
     const val = Number(document.getElementById("planInput")?.value);
-    if (!val || val < 1) { alert("Введите число аптек"); return; }
+    if (!val || val < 1) { showToast("⚠️ Введите число аптек"); return; }
     localStorage.setItem("dayPlan", val);
     localStorage.setItem("dayFact", 0);
     renderDailyPlan();
@@ -302,8 +527,13 @@ function showUndoButton(seconds) {
 
     const btn = document.createElement("button");
     btn.id = "undoBtn";
-    btn.style.background = "#f59e0b";
-    btn.style.marginTop = "12px";
+    btn.style.cssText = `
+        background: linear-gradient(135deg, #ffb547, #f59e0b);
+        color: #080f1a;
+        margin-top: 12px;
+        font-family: 'Syne', sans-serif;
+        font-weight: 700;
+    `;
     btn.innerHTML = `↩️ Вернуться на смену (${seconds}с)`;
     btn.onclick = undoEndShift;
 
@@ -352,7 +582,7 @@ function undoEndShift() {
     status.innerHTML = `🟢 Смена начата в <b>${startFormatted}</b>`;
 
     startShiftTimer();
-    alert("✅ Смена восстановлена!");
+    showToast("✅ Смена восстановлена!");
 }
 
 
@@ -391,42 +621,41 @@ function renderProfile() {
 
     document.getElementById("profileContent").innerHTML = `
         <div style="text-align:center;padding:20px 0 10px;">
-            <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;margin:0 auto 6px;overflow:hidden;cursor:pointer;position:relative;" onclick="changeAvatar()">
+            <div style="width:84px;height:84px;border-radius:50%;background:linear-gradient(135deg,#20d2b4,#2edd8e);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;overflow:hidden;cursor:pointer;position:relative;box-shadow:0 0 24px rgba(32,210,180,0.3);" onclick="changeAvatar()">
                 ${avatarContent}
                 <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.45);font-size:11px;color:white;padding:3px 0;border-radius:0 0 50px 50px;">✏️</div>
             </div>
             <input type="file" id="avatarInput" accept="image/*" style="display:none;" onchange="onAvatarChange(event)">
-            <div style="font-size:22px;font-weight:bold;margin-top:8px;">${name}</div>
-            <div style="color:#94a3b8;font-size:14px;margin-top:4px;">${username}</div>
-            <div style="display:inline-flex;align-items:center;gap:6px;background:#1e293b;border-radius:20px;padding:6px 16px;margin-top:12px;font-size:14px;color:#60a5fa;">${rank.icon} ${rank.label}</div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:22px;margin-top:8px;">${name}</div>
+            <div style="color:#7a9ab8;font-size:14px;margin-top:4px;">${username}</div>
+            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(32,210,180,0.1);border:1px solid rgba(32,210,180,0.2);border-radius:20px;padding:6px 16px;margin-top:12px;font-size:14px;color:#20d2b4;">${rank.icon} ${rank.label}</div>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;">
-            <div style="background:#1e293b;border-radius:16px;padding:16px;text-align:center;">
-                <div style="font-size:28px;font-weight:bold;color:#3b82f6;">${s.shiftsCount}</div>
-                <div style="font-size:13px;color:#94a3b8;margin-top:4px;">Смен отработано</div>
+            <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;text-align:center;">
+                <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;background:linear-gradient(135deg,#20d2b4,#2edd8e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">${s.shiftsCount}</div>
+                <div style="font-size:13px;color:#7a9ab8;margin-top:4px;">Смен отработано</div>
             </div>
-            <div style="background:#1e293b;border-radius:16px;padding:16px;text-align:center;">
-                <div style="font-size:28px;font-weight:bold;color:#3b82f6;">${s.pharmaciesCount}</div>
-                <div style="font-size:13px;color:#94a3b8;margin-top:4px;">Аптек загружено</div>
+            <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;text-align:center;">
+                <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;background:linear-gradient(135deg,#20d2b4,#2edd8e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">${s.pharmaciesCount}</div>
+                <div style="font-size:13px;color:#7a9ab8;margin-top:4px;">Аптек загружено</div>
             </div>
-            <div style="background:#1e293b;border-radius:16px;padding:16px;text-align:center;">
-                <div style="font-size:22px;font-weight:bold;color:#3b82f6;">${formatTime(s.totalMinutes)}</div>
-                <div style="font-size:13px;color:#94a3b8;margin-top:4px;">Всего отработано</div>
+            <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;text-align:center;">
+                <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700;background:linear-gradient(135deg,#20d2b4,#2edd8e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">${formatTime(s.totalMinutes)}</div>
+                <div style="font-size:13px;color:#7a9ab8;margin-top:4px;">Всего отработано</div>
             </div>
-            <div style="background:#1e293b;border-radius:16px;padding:16px;text-align:center;">
-                <div style="font-size:22px;font-weight:bold;color:#3b82f6;">${formatTime(s.bestShift)}</div>
-                <div style="font-size:13px;color:#94a3b8;margin-top:4px;">Рекорд смены</div>
+            <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;text-align:center;">
+                <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700;background:linear-gradient(135deg,#20d2b4,#2edd8e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">${formatTime(s.bestShift)}</div>
+                <div style="font-size:13px;color:#7a9ab8;margin-top:4px;">Рекорд смены</div>
             </div>
         </div>
 
-        <div style="background:#1e293b;border-radius:16px;padding:16px;margin-top:12px;text-align:center;">
-            <div style="font-size:32px;font-weight:bold;color:#f59e0b;">🔥 ${s.streak}</div>
-            <div style="font-size:13px;color:#94a3b8;margin-top:4px;">Дней подряд 
-                на работе</div>
+        <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;margin-top:12px;text-align:center;">
+            <div style="font-family:'Syne',sans-serif;font-size:32px;font-weight:700;color:#ffb547;">🔥 ${s.streak}</div>
+            <div style="font-size:13px;color:#7a9ab8;margin-top:4px;">Дней подряд на работе</div>
         </div>
 
-        <div style="background:#1e293b;border-radius:16px;padding:16px;margin-top:12px;font-size:14px;color:#94a3b8;line-height:1.8;">
+        <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;margin-top:12px;font-size:14px;color:#7a9ab8;line-height:1.8;">
             📊 ${getRankProgress(s.shiftsCount)}<br>
             📅 Последняя смена: ${s.lastShiftDate || "—"}
         </div>
@@ -443,22 +672,26 @@ function renderHistory() {
     const el = document.getElementById("historyContent");
 
     if (history.length === 0) {
-        el.innerHTML = `<div style="text-align:center;color:#94a3b8;margin-top:40px;font-size:15px;">📭 История смен пока пуста</div>`;
+        el.innerHTML = `
+            <div style="text-align:center;color:#7a9ab8;margin-top:60px;">
+                <div style="font-size:40px;margin-bottom:12px;">📭</div>
+                <div style="font-family:'Syne',sans-serif;font-size:16px;">История смен пока пуста</div>
+            </div>`;
         return;
     }
 
     el.innerHTML = history.map((entry, i) => `
-        <div style="background:#1e293b;border-radius:14px;padding:16px;margin-top:12px;line-height:1.8;">
-            <div style="font-weight:bold;color:#60a5fa;margin-bottom:6px;">📅 ${entry.date}</div>
-            <div>🟢 Начало: <b>${entry.start}</b></div>
-            <div>🔴 Конец: <b>${entry.end}</b></div>
-            <div>⏱ Отработано: <b>${entry.worked}</b></div>
-            ${entry.pharmacies ? `<div>🏥 Аптек: <b>${entry.pharmacies}</b></div>` : ""}
+        <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;margin-top:12px;line-height:1.9;">
+            <div style="font-family:'Syne',sans-serif;font-weight:600;font-size:13px;color:#20d2b4;margin-bottom:8px;letter-spacing:0.3px;">📅 ${entry.date}</div>
+            <div style="font-size:14px;">🟢 Начало: <b>${entry.start}</b></div>
+            <div style="font-size:14px;">🔴 Конец: <b>${entry.end}</b></div>
+            <div style="font-size:14px;">⏱ Отработано: <b>${entry.worked}</b></div>
+            ${entry.pharmacies ? `<div style="font-size:14px;">🏥 Аптек: <b>${entry.pharmacies}</b></div>` : ""}
             ${entry.note
-                ? `<div style="margin-top:8px;padding:10px;background:#0f172a;border-radius:10px;font-size:14px;color:#94a3b8;">📝 ${entry.note}</div>`
+                ? `<div style="margin-top:8px;padding:10px;background:#0d1829;border-radius:10px;font-size:13px;color:#7a9ab8;">📝 ${entry.note}</div>`
                 : `<div style="margin-top:8px;">
                        <input id="note_${i}" placeholder="Добавить заметку о смене..." style="margin-top:4px;height:44px;font-size:14px;">
-                       <button onclick="saveNote(${i})" style="min-height:38px;font-size:14px;margin-top:6px;background:#1d4ed8;">💾 Сохранить заметку</button>
+                       <button onclick="saveNote(${i})" style="min-height:38px;font-size:14px;margin-top:6px;">💾 Сохранить заметку</button>
                    </div>`
             }
         </div>
@@ -537,8 +770,18 @@ function savePharmacy() {
     const comment = document.getElementById("contact_comment").value.trim();
     const name = document.getElementById("name").value;
 
-    if (!name)            { alert("Введите название аптеки"); return; }
-    if (photos.length === 0) { alert("Добавьте фото"); return; }
+    if (!name)            { showToast("⚠️ Введите название аптеки"); return; }
+    if (photos.length === 0) { showToast("⚠️ Добавьте фото"); return; }
+
+    const pharmacyData = {
+        name,
+        lprName:     document.getElementById("lpr_name").value,
+        lprPhone:    document.getElementById("lpr_phone").value,
+        software:    softwareValue,
+        status:      document.getElementById("pharmacy_status").value,
+        comment,
+        photosCount: photos.length
+    };
 
     navigator.geolocation.getCurrentPosition(
         function(pos) {
@@ -556,18 +799,10 @@ function savePharmacy() {
                 latitude: lat,
                 longitude: lon,
                 map: mapLink,
-                data: {
-                    name,
-                    lprName:     document.getElementById("lpr_name").value,
-                    lprPhone:    document.getElementById("lpr_phone").value,
-                    software:    softwareValue,
-                    status:      document.getElementById("pharmacy_status").value,
-                    comment,
-                    photosCount: photos.length
-                }
+                data: pharmacyData
             });
 
-            alert("🏥 Аптека сохранена");
+            showPharmacyCard(pharmacyData);
         },
         function() {
             addPharmacyStat();
@@ -577,18 +812,10 @@ function savePharmacy() {
             sendToServer({
                 type: "PHARMACY_CREATED",
                 user: user?.first_name || null,
-                data: {
-                    name,
-                    lprName:     document.getElementById("lpr_name").value,
-                    lprPhone:    document.getElementById("lpr_phone").value,
-                    software:    softwareValue,
-                    status:      document.getElementById("pharmacy_status").value,
-                    comment,
-                    photosCount: photos.length
-                }
+                data: pharmacyData
             });
 
-            alert("🏥 Аптека сохранена");
+            showPharmacyCard(pharmacyData);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
@@ -601,7 +828,7 @@ function savePharmacy() {
 
 function startShift() {
     if (localStorage.getItem("shiftActive") === "true") {
-        alert("🟢 Смена уже начата");
+        showToast("🟢 Смена уже начата");
         return;
     }
 
@@ -658,7 +885,7 @@ function startShift() {
 
 function endShift() {
     if (localStorage.getItem("shiftActive") !== "true") {
-        alert("❌ Смена не начата");
+        showToast("❌ Смена не начата");
         return;
     }
 
