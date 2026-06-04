@@ -395,15 +395,42 @@ function renderProfile() {
 // =========================
 
 let shiftInterval = null;
+let shiftStartLocation = null;
+let shiftEndLocation = null;
 
 function startShift() {
-    if (localStorage.getItem("shift_start")) { showToast("⚠️ Смена уже идет"); return; }
+    if (localStorage.getItem("shift_start")) { 
+        showToast("⚠️ Смена уже идет"); 
+        return; 
+    }
+
     localStorage.setItem("shift_start", new Date().getTime());
     localStorage.setItem("dayPlan", 10);
     localStorage.setItem("dayFact", 0);
-    showToast("🟢 Смена успешно начата");
-    checkUndoWindow();
-    renderDailyPlan();
+
+    showToast("🟢 Получаем локацию...");
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+
+                shiftStartLocation = { lat, lon };
+
+                showToast("🟢 Смена успешно начата");
+                checkUndoWindow();
+                renderDailyPlan();
+            },
+            function() {
+                showToast("⚠️ Не удалось получить локацию старта");
+                checkUndoWindow();
+                renderDailyPlan();
+            }
+        );
+    } else {
+        showToast("⚠️ Геолокация не поддерживается");
+    }
 }
 
 function saveDailyPlan() {
@@ -425,36 +452,73 @@ function saveDailyPlan() {
 function endShift() {
     const start = localStorage.getItem("shift_start");
     if (!start) { showToast("⚠️ Смена не начата"); return; }
-    
+
     const end = new Date().getTime();
     const durationMs = end - Number(start);
     const durationMin = Math.round(durationMs / 60000);
-    
-    const historyItem = {
-        date: new Date(Number(start)).toLocaleDateString("ru-RU"),
-        start: new Date(Number(start)).toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'}),
-        end: new Date(end).toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'}),
-        duration: durationMin,
-        fact: localStorage.getItem("dayFact") || 0
-    };
-    
-    let history = JSON.parse(localStorage.getItem("shift_history") || "[]");
-    history.unshift(historyItem);
-    localStorage.setItem("shift_history", JSON.stringify(history));
-    
-    sendToServer({
-        event: "shift_end",
-        user: user,
-        duration: durationMin,
-        fact: historyItem.fact
-    });
-    
-    localStorage.removeItem("shift_start");
-    if (shiftInterval) clearInterval(shiftInterval);
-    
-    showToast("🔴 Смена завершена");
-    checkUndoWindow();
-    renderDailyPlan();
+
+    showToast("🔴 Получаем финальную локацию...");
+
+    function finish(endLoc = null) {
+
+        const historyItem = {
+            date: new Date(Number(start)).toLocaleDateString("ru-RU"),
+            start: new Date(Number(start)).toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'}),
+            end: new Date(end).toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'}),
+            duration: durationMin,
+            fact: localStorage.getItem("dayFact") || 0,
+
+            startLat: shiftStartLocation?.lat || null,
+            startLon: shiftStartLocation?.lon || null,
+            endLat: endLoc?.lat || null,
+            endLon: endLoc?.lon || null,
+
+            startMap: shiftStartLocation
+                ? `https://www.google.com/maps?q=${shiftStartLocation.lat},${shiftStartLocation.lon}`
+                : null,
+
+            endMap: endLoc
+                ? `https://www.google.com/maps?q=${endLoc.lat},${endLoc.lon}`
+                : null
+        };
+
+        let history = JSON.parse(localStorage.getItem("shift_history") || "[]");
+        history.unshift(historyItem);
+        localStorage.setItem("shift_history", JSON.stringify(history));
+
+        sendToServer({
+            event: "shift_end",
+            user: user,
+            duration: durationMin,
+            fact: historyItem.fact,
+            startLocation: shiftStartLocation,
+            endLocation: endLoc
+        });
+
+        localStorage.removeItem("shift_start");
+        if (shiftInterval) clearInterval(shiftInterval);
+
+        showToast("🔴 Смена завершена");
+        checkUndoWindow();
+        renderDailyPlan();
+    }
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
+                shiftEndLocation = {
+                    lat: pos.coords.latitude,
+                    lon: pos.coords.longitude
+                };
+                finish(shiftEndLocation);
+            },
+            function() {
+                finish(null);
+            }
+        );
+    } else {
+        finish(null);
+    }
 }
 
 function checkUndoWindow() {
@@ -539,6 +603,9 @@ function renderHistory() {
             <p>📅 Дата: <b>${item.date}</b></p>
             <p>⏱ Время: <b>${item.start} - ${item.end}</b> (${item.duration} мин)</p>
             <p>🏪 Посещено аптек: <b style="color:var(--teal);">${item.fact}</b></p>
+
+            ${item.startMap ? `<p>📍 Старт: <a href="${item.startMap}" target="_blank">открыть</a></p>` : ""}
+            ${item.endMap ? `<p>📍 Финиш: <a href="${item.endMap}" target="_blank">открыть</a></p>` : ""}
         </div>
     `).join("");
 }
