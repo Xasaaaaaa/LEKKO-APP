@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LEKKO APP</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -251,6 +253,25 @@ button:disabled {
     font-size: 13px;
     padding: 10px;
 }
+
+/* Leaflet dark theme styling overrides */
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+    background-color: var(--card) !important;
+    color: var(--white) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5) !important;
+}
+.leaflet-popup-content {
+    margin: 12px 16px !important;
+    line-height: 1.5 !important;
+    font-family: 'DM Sans', sans-serif !important;
+}
+.leaflet-popup-close-button {
+    color: var(--muted) !important;
+}
+.leaflet-container {
+    background: var(--bg2) !important;
+}
 </style>
 </head>
 <body>
@@ -277,6 +298,10 @@ button:disabled {
         <div class="menu-card" onclick="openPage('pharmacy_history_page')">
             <div class="icon">🏢</div>
             <div class="label">История аптек</div>
+        </div>
+        <div class="menu-card" onclick="openPage('map_page')">
+            <div class="icon">🗺️</div>
+            <div class="label">Карта посещений</div>
         </div>
         <div class="menu-card" onclick="openPage('profile')" style="grid-column: span 2; min-height: 90px; flex-direction: row; align-items: center; justify-content: flex-start; gap: 16px;">
             <div class="icon" style="margin-bottom: 0;">👤</div>
@@ -371,6 +396,39 @@ button:disabled {
     </div>
     
     <div id="pharmacyHistoryList"></div>
+</div>
+
+<div id="map_page" style="display:none;">
+    <button class="back-btn" onclick="back()">← Назад</button>
+    <div class="section-title"><span>🗺️</span> Карта посещений</div>
+    
+    <div class="map-control-box" style="margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px;">
+        <button onclick="showMapForToday()" style="flex: 1; min-width: 80px; padding: 10px; font-size: 13px;">Сегодня</button>
+        <button onclick="showMapForWeek()" style="flex: 1; min-width: 80px; padding: 10px; font-size: 13px; background: var(--card2); border: 1px solid var(--border); color: var(--white);">За неделю</button>
+        <button onclick="showMapForAll()" style="flex: 1; min-width: 80px; padding: 10px; font-size: 13px; background: var(--card2); border: 1px solid var(--border); color: var(--white);">Все</button>
+    </div>
+
+    <div style="margin-bottom: 12px;">
+        <select id="mapShiftSelect" onchange="showMapForSelectedShift()" style="margin-bottom: 0; padding: 10px 14px; font-size: 14px;">
+            <option value="" disabled selected>🔍 Выбрать смену из истории...</option>
+        </select>
+    </div>
+
+    <div class="info-card" style="margin-bottom: 16px; padding: 12px;">
+        <p style="margin-bottom: 8px; font-size: 13px; font-weight: 600; color: var(--muted);">📅 Свободный выбор даты</p>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="date" id="mapDateFrom" style="flex: 1; margin-bottom: 0; padding: 8px 10px; font-size: 13px; border-radius: 10px;" placeholder="С">
+            <span style="color: var(--muted); font-size: 12px;">по</span>
+            <input type="date" id="mapDateTo" style="flex: 1; margin-bottom: 0; padding: 8px 10px; font-size: 13px; border-radius: 10px;" placeholder="По">
+            <button onclick="showMapForCustomDateRange()" style="width: auto; padding: 8px 14px; font-size: 13px; margin-bottom: 0; border-radius: 10px; background: linear-gradient(135deg, var(--teal), var(--teal2)); color: #080f1a;">Применить</button>
+        </div>
+    </div>
+    
+    <div id="map-canvas" style="height: 400px; border-radius: 16px; margin-bottom: 16px; border: 1px solid var(--border); background-color: var(--card);"></div>
+    
+    <div class="info-card" id="mapSummaryCard" style="display: none; line-height: 1.6; font-size: 14px; margin-bottom: 16px;">
+        <div id="mapSummaryText"></div>
+    </div>
 </div>
 
 <div id="profile" style="display:none;">

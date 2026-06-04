@@ -53,7 +53,7 @@ function setupSoftwareIdMask() {
 // =========================
 
 function openPage(page) {
-    const pages = ["dashboard", "pharmacy", "shift", "profile", "history", "pharmacy_history_page"];
+    const pages = ["dashboard", "pharmacy", "shift", "profile", "history", "pharmacy_history_page", "map_page"];
     pages.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = "none";
@@ -70,6 +70,11 @@ function openPage(page) {
     if (page === "profile") renderProfile();
     if (page === "history") renderHistory();
     if (page === "pharmacy_history_page") renderPharmacyHistory();
+    if (page === "map_page") {
+        initMap();
+        populateShiftDropdown();
+        showMapForToday();
+    }
 }
 
 function back() {
@@ -528,7 +533,9 @@ function endShift() {
             endLat: endLoc?.lat || null,
             endLon: endLoc?.lon || null,
             startMap: shiftStartLocation ? `https://www.google.com/maps/search/?api=1&query=${shiftStartLocation.lat},${shiftStartLocation.lon}` : null,
-            endMap: endLoc ? `https://www.google.com/maps/search/?api=1&query=${endLoc.lat},${endLoc.lon}` : null
+            endMap: endLoc ? `https://www.google.com/maps/search/?api=1&query=${endLoc.lat},${endLoc.lon}` : null,
+            startTimestamp: Number(start),
+            endTimestamp: end
         };
 
         let history = JSON.parse(localStorage.getItem("shift_history") || "[]");
@@ -667,3 +674,338 @@ document.addEventListener("DOMContentLoaded", () => {
 
     validatePharmacyForm();
 });
+
+// =========================
+// ИНТЕГРИРОВАННАЯ КАРТА LEAFLET
+// =========================
+
+let mapInstance = null;
+let mapMarkersGroup = null;
+let mapPolyline = null;
+
+function initMap() {
+    if (mapInstance) {
+        setTimeout(() => {
+            mapInstance.invalidateSize();
+        }, 100);
+        return;
+    }
+
+    // Default center Tashkent
+    mapInstance = L.map('map-canvas').setView([41.311081, 69.240562], 12);
+    mapMarkersGroup = L.featureGroup().addTo(mapInstance);
+
+    // Dark tiles (CartoDB Dark Matter)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20
+    }).addTo(mapInstance);
+}
+
+function showMapForToday() {
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+    
+    const today = new Date().toLocaleDateString("ru-RU");
+    const todayPharms = history.filter(p => p.date === today && p.latitude && p.longitude);
+
+    updateMapControlActiveButton(0);
+    document.getElementById("mapShiftSelect").value = "";
+    document.getElementById("mapDateFrom").value = "";
+    document.getElementById("mapDateTo").value = "";
+
+    if (todayPharms.length === 0) {
+        clearMapData();
+        showMapSummary("📭 Сегодня аптек с геолокацией нет");
+        return;
+    }
+
+    todayPharms.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    renderMapData(todayPharms, "Сегодняшний маршрут", true);
+}
+
+function showMapForWeek() {
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+    
+    const from = Date.now() - 7 * 86400000;
+    const filtered = history.filter(p => p.timestamp && p.timestamp >= from && p.latitude && p.longitude);
+
+    updateMapControlActiveButton(1);
+    document.getElementById("mapShiftSelect").value = "";
+    document.getElementById("mapDateFrom").value = "";
+    document.getElementById("mapDateTo").value = "";
+
+    if (filtered.length === 0) {
+        clearMapData();
+        showMapSummary("📭 За последние 7 дней аптек с геолокацией нет");
+        return;
+    }
+
+    filtered.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    renderMapData(filtered, "Аптеки за последние 7 дней", false);
+}
+
+function showMapForAll() {
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+    
+    const filtered = history.filter(p => p.latitude && p.longitude);
+
+    updateMapControlActiveButton(2);
+    document.getElementById("mapShiftSelect").value = "";
+    document.getElementById("mapDateFrom").value = "";
+    document.getElementById("mapDateTo").value = "";
+
+    if (filtered.length === 0) {
+        clearMapData();
+        showMapSummary("📭 История аптек с геолокацией пуста");
+        return;
+    }
+
+    filtered.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    renderMapData(filtered, "Все посещенные аптеки", false);
+}
+
+function populateShiftDropdown() {
+    const select = document.getElementById("mapShiftSelect");
+    if (!select) return;
+
+    select.innerHTML = '<option value="" disabled selected>🔍 Выбрать смену из истории...</option>';
+
+    let shiftHistory = [];
+    try {
+        shiftHistory = JSON.parse(localStorage.getItem("shift_history") || "[]");
+    } catch(e) { return; }
+
+    shiftHistory.forEach((shift, index) => {
+        const option = document.createElement("option");
+        option.value = index;
+        option.textContent = `📅 ${shift.date} (${shift.start} - ${shift.end}) — ${shift.fact} апт.`;
+        select.appendChild(option);
+    });
+}
+
+function showMapForSelectedShift() {
+    const select = document.getElementById("mapShiftSelect");
+    if (!select) return;
+
+    const shiftIndex = select.value;
+    if (shiftIndex === "") return;
+
+    updateMapControlActiveButton(-1);
+    document.getElementById("mapDateFrom").value = "";
+    document.getElementById("mapDateTo").value = "";
+
+    let shiftHistory = [];
+    try {
+        shiftHistory = JSON.parse(localStorage.getItem("shift_history") || "[]");
+    } catch(e) { return; }
+
+    const shift = shiftHistory[shiftIndex];
+    if (!shift) return;
+
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+
+    let shiftPharms = [];
+    
+    if (shift.startTimestamp && shift.endTimestamp) {
+        shiftPharms = history.filter(p => p.timestamp && p.timestamp >= shift.startTimestamp && p.timestamp <= shift.endTimestamp && p.latitude && p.longitude);
+    } else {
+        shiftPharms = history.filter(p => p.date === shift.date && p.latitude && p.longitude);
+        shiftPharms.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    }
+
+    shiftPharms.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+    clearMapData();
+
+    if (shift.startLat && shift.startLon) {
+        const startMarker = L.circleMarker([shift.startLat, shift.startLon], {
+            radius: 9,
+            fillColor: '#2f80ed',
+            color: '#2f80ed',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.9
+        }).addTo(mapMarkersGroup);
+        startMarker.bindPopup(`<b>🟢 Старт смены</b><br>${shift.date} в ${shift.start}`);
+    }
+
+    if (shift.endLat && shift.endLon) {
+        const endMarker = L.circleMarker([shift.endLat, shift.endLon], {
+            radius: 9,
+            fillColor: '#ff4f6d',
+            color: '#ff4f6d',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.9
+        }).addTo(mapMarkersGroup);
+        endMarker.bindPopup(`<b>🔴 Финиш смены</b><br>${shift.date} в ${shift.end}`);
+    }
+
+    shiftPharms.forEach((p, idx) => {
+        addPharmacyMarker(p, idx + 1);
+    });
+
+    const routePoints = [];
+    if (shift.startLat && shift.startLon) {
+        routePoints.push([shift.startLat, shift.startLon]);
+    }
+    shiftPharms.forEach(p => {
+        routePoints.push([p.latitude, p.longitude]);
+    });
+    if (shift.endLat && shift.endLon) {
+        routePoints.push([shift.endLat, shift.endLon]);
+    }
+
+    if (routePoints.length > 1) {
+        mapPolyline = L.polyline(routePoints, {
+            color: '#2edd8e',
+            weight: 3,
+            dashArray: '5, 8',
+            opacity: 0.7
+        }).addTo(mapInstance);
+    }
+
+    if (mapMarkersGroup.getLayers().length > 0) {
+        mapInstance.fitBounds(mapMarkersGroup.getBounds(), { padding: [40, 40] });
+    }
+
+    let summaryText = `<b>Смена ${shift.date} (${shift.start} - ${shift.end})</b><br>`;
+    summaryText += `⏱ Продолжительность: ${shift.duration} мин<br>`;
+    summaryText += `🏪 Аптек на карте: ${shiftPharms.length} из ${shift.fact} посещенных`;
+    showMapSummary(summaryText);
+}
+
+function clearMapData() {
+    if (mapMarkersGroup) mapMarkersGroup.clearLayers();
+    if (mapPolyline) {
+        mapInstance.removeLayer(mapPolyline);
+        mapPolyline = null;
+    }
+}
+
+function addPharmacyMarker(p, number) {
+    const marker = L.circleMarker([p.latitude, p.longitude], {
+        radius: 8,
+        fillColor: '#2edd8e',
+        color: '#111e30',
+        weight: 1.5,
+        opacity: 1,
+        fillOpacity: 0.9
+    }).addTo(mapMarkersGroup);
+
+    const statusLabels = { cold: "Холодный контакт", inwork: "В работе", deal: "Договорились", decline: "Отказ" };
+    const statusEmojis = { cold: "❄️", inwork: "🔄", deal: "✅", decline: "❌" };
+
+    const popupContent = `
+        <div style="font-family:'DM Sans',sans-serif; font-size:13px; color:var(--white);">
+            <div style="font-weight:700; font-size:15px; margin-bottom:6px; color:var(--accent);">🏪 ${number ? number + '. ' : ''}${p.name}</div>
+            <div style="margin-bottom:4px;">📅 ${p.date} в ${p.time}</div>
+            <div style="margin-bottom:4px;">👤 ЛПР: <b>${p.lprName || '—'}</b></div>
+            <div style="margin-bottom:4px;">📞 Тел: <b>${p.lprPhone}</b></div>
+            <div style="margin-bottom:4px;">💻 ПО: <b>${p.software}${p.softwareId ? ' (ID: ' + p.softwareId + ')' : ''}</b></div>
+            <div style="margin-top:6px; font-weight:600; color:var(--green);">${statusEmojis[p.status] || ''} ${statusLabels[p.status] || p.status}</div>
+            ${p.comment ? `<div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.1); font-style:italic; color:var(--muted);">💬 ${p.comment}</div>` : ''}
+        </div>
+    `;
+    marker.bindPopup(popupContent);
+}
+
+function renderMapData(pharmacies, title, drawRoute) {
+    clearMapData();
+
+    pharmacies.forEach((p, idx) => {
+        addPharmacyMarker(p, idx + 1);
+    });
+
+    if (drawRoute && pharmacies.length > 1) {
+        const routePoints = pharmacies.map(p => [p.latitude, p.longitude]);
+        mapPolyline = L.polyline(routePoints, {
+            color: '#2edd8e',
+            weight: 3,
+            dashArray: '5, 8',
+            opacity: 0.7
+        }).addTo(mapInstance);
+    }
+
+    if (mapMarkersGroup.getLayers().length > 0) {
+        mapInstance.fitBounds(mapMarkersGroup.getBounds(), { padding: [40, 40] });
+    }
+
+    showMapSummary(`<b>${title}</b><br>📍 Всего аптек на карте: ${pharmacies.length}`);
+}
+
+function showMapSummary(text) {
+    const card = document.getElementById("mapSummaryCard");
+    const container = document.getElementById("mapSummaryText");
+    if (!card || !container) return;
+
+    container.innerHTML = text;
+    card.style.display = "block";
+}
+
+function updateMapControlActiveButton(activeIndex) {
+    const buttons = document.querySelectorAll("#map_page .map-control-box button");
+    buttons.forEach((btn, idx) => {
+        if (idx === activeIndex) {
+            btn.style.background = "linear-gradient(135deg, var(--teal), var(--teal2))";
+            btn.style.color = "#080f1a";
+            btn.style.borderColor = "transparent";
+        } else {
+            btn.style.background = "var(--card2)";
+            btn.style.color = "var(--white)";
+            btn.style.borderColor = "var(--border)";
+        }
+    });
+}
+
+function showMapForCustomDateRange() {
+    const fromInput = document.getElementById("mapDateFrom");
+    const toInput = document.getElementById("mapDateTo");
+    if (!fromInput || !toInput) return;
+
+    const fromVal = fromInput.value;
+    const toVal = toInput.value;
+
+    if (!fromVal || !toVal) {
+        showToast("⚠️ Укажите обе даты");
+        return;
+    }
+
+    updateMapControlActiveButton(-1);
+    document.getElementById("mapShiftSelect").value = "";
+
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+
+    const startTimestamp = new Date(fromVal + "T00:00:00").getTime();
+    const endTimestamp = new Date(toVal + "T23:59:59").getTime();
+
+    if (startTimestamp > endTimestamp) {
+        showToast("⚠️ Начальная дата не может быть больше конечной");
+        return;
+    }
+
+    const filtered = history.filter(p => p.timestamp && p.timestamp >= startTimestamp && p.timestamp <= endTimestamp && p.latitude && p.longitude);
+
+    if (filtered.length === 0) {
+        clearMapData();
+        showMapSummary(`📭 За период с ${formatDateString(fromVal)} по ${formatDateString(toVal)} аптек с геолокацией нет`);
+        return;
+    }
+
+    filtered.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    
+    const title = `Аптеки с ${formatDateString(fromVal)} по ${formatDateString(toVal)}`;
+    renderMapData(filtered, title, false);
+}
+
+function formatDateString(dateStr) {
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+}
