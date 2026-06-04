@@ -163,6 +163,12 @@ button {
 button:active {
     opacity: 0.9;
 }
+button:disabled {
+    background: #1a2a3a;
+    color: #4a5a6a;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
 .btn-ghost {
     background: none;
     border: 1px solid var(--border);
@@ -235,11 +241,20 @@ button:active {
     padding: 14px;
     margin-bottom: 10px;
 }
+
+.map-control-box {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.map-control-box button {
+    font-size: 13px;
+    padding: 10px;
+}
 </style>
 </head>
 <body>
 
-<!-- ГЛАВНОЕ МЕНЮ -->
 <div id="dashboard">
     <div class="app-header">
         <div class="logo-icon">💊</div>
@@ -270,7 +285,6 @@ button:active {
     </div>
 </div>
 
-<!-- АПТЕКА -->
 <div id="pharmacy" style="display:none;">
     <button class="back-btn" onclick="back()">← Назад</button>
     <div class="section-title"><span>🏥</span> Добавить аптеку</div>
@@ -286,15 +300,14 @@ button:active {
         <option value="1C">1С</option>
         <option value="SmartPharma">SmartPharma</option>
         <option value="QulayApteka">QulayApteka</option>
-            <optgroup label="FOM">
-        <option value="FOM F-Summary">F-Summary (аналог Мегапрайс)</option>
-        <option value="FOM F-Sklad">F-Sklad</option>
-    </optgroup>
-
-    <optgroup label="OSON">
-        <option value="OSON Price">OSON Прайс</option>
-        <option value="OSON Sklad">OSON Склад</option>
-    </optgroup>
+        <optgroup label="FOM">
+            <option value="FOM F-Summary">F-Summary (аналог Мегапрайс)</option>
+            <option value="FOM F-Sklad">F-Sklad</option>
+        </optgroup>
+        <optgroup label="OSON">
+            <option value="OSON Price">OSON Прайс</option>
+            <option value="OSON Sklad">OSON Склад</option>
+        </optgroup>
         <option value="Другая">Другая (ввести вручную)</option>
     </select>
     
@@ -320,7 +333,6 @@ button:active {
     <button id="saveBtn" onclick="savePharmacy()">💾 Сохранить аптеку</button>
 </div>
 
-<!-- СМЕНА -->
 <div id="shift" style="display:none;">
     <button class="back-btn" onclick="back()">← Назад</button>
     <div class="section-title"><span style="color: var(--green);">●</span> Смена</div>
@@ -332,7 +344,6 @@ button:active {
         <div id="shiftStatus"></div>
     </div>
 
-    <!-- Блок плана на день с вводом -->
     <div class="info-card">
         <p style="margin-bottom: 8px;">🎯 План на день</p>
         <input type="number" id="dayPlanInput" placeholder="Сколько аптек планируете посетить?" style="margin-bottom: 10px;">
@@ -344,25 +355,27 @@ button:active {
     <button class="btn-end" onclick="endShift()">🔴 Завершить смену</button>
 </div>
 
-<!-- ИСТОРИЯ СМЕН -->
 <div id="history" style="display:none;">
     <button class="back-btn" onclick="back()">← Назад</button>
     <div class="section-title"><span>📋</span> История смен</div>
     <div id="historyList"></div>
 </div>
 
-<!-- ИСТОРИЯ АПТЕК -->
 <div id="pharmacy_history_page" style="display:none;">
     <button class="back-btn" onclick="back()">← Назад</button>
     <div class="section-title"><span>🏢</span> История аптек</div>
+    
+    <div class="map-control-box">
+        <button onclick="openMapForToday()">🗺️ Маршрут за сегодня</button>
+        <button onclick="openMapForPeriod(7)" style="background: var(--card2); border: 1px solid var(--border); color: var(--white);">📅 Маршрут за 7 дней</button>
+    </div>
+    
     <div id="pharmacyHistoryList"></div>
 </div>
 
-<!-- ПРОФИЛЬ -->
 <div id="profile" style="display:none;">
     <button class="back-btn" onclick="back()">← Назад</button>
     
-    <!-- Стилизованный блок юзера с круглой аватаркой -->
     <div style="text-align: center; margin-bottom: 24px;">
         <div id="prof_avatar" style="width: 80px; height: 80px; background: #2f80ed; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; margin: 0 auto 12px; color: white;">X</div>
         <div class="app-title" id="prof_name" style="-webkit-text-fill-color: initial; color: var(--white); font-size: 20px; font-weight: 700;">Загрузка...</div>
@@ -372,7 +385,6 @@ button:active {
         </div>
     </div>
 
-    <!-- Сетка карточек статистики 2х2 -->
     <div class="menu-grid" style="gap: 12px; margin-bottom: 12px;">
         <div class="info-card" style="margin-bottom: 0; text-align: center; padding: 16px;">
             <div id="stat_shifts_count" style="font-size: 32px; font-weight: 700; color: #2f80ed; margin-bottom: 4px;">0</div>
@@ -395,13 +407,11 @@ button:active {
         </div>
     </div>
 
-    <!-- Блок с огоньком -->
     <div class="info-card" style="text-align: center; padding: 16px;">
         <div style="font-size: 42px; font-weight: 700; color: #f2994a; display: flex; align-items: center; justify-content: center; gap: 8px;">🔥 0</div>
         <p style="font-size: 13px; margin-bottom: 0;">Дней подряд на работе</p>
     </div>
 
-    <!-- Развитие / С рангами -->
     <div class="info-card" style="font-size: 14px; line-height: 1.8;">
         <div>📊 Ещё 1 смена до ранга 📋 Стажёр</div>
         <div style="color: var(--muted);">📅 Последняя смена: —</div>
@@ -412,4 +422,4 @@ button:active {
 
 <script src="app.js"></script>
 </body>
-</html> 
+</html>

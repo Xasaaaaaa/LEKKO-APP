@@ -42,11 +42,8 @@ function setupSoftwareIdMask() {
 
     input.addEventListener("input", () => {
         let val = input.value;
-
         val = val.replace(/\D/g, "");
-
         val = val.slice(0, 9);
-
         input.value = val;
     });
 }
@@ -206,7 +203,7 @@ function savePharmacy() {
         function(pos) {
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
-            const mapLink = `https://www.google.com/maps?q=${lat},${lon}`;
+            const mapLink = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
 
             const data = {
                 event: "pharmacy_add",
@@ -222,7 +219,9 @@ function savePharmacy() {
                 latitude: lat,
                 longitude: lon,
                 map: mapLink,
-                date: new Date().toLocaleString("ru-RU")
+                timestamp: Date.now(),
+                date: new Date().toLocaleDateString("ru-RU"),
+                time: new Date().toLocaleTimeString("ru-RU", {hour: '2-digit', minute: '2-digit'})
             };
 
             sendToServer(data);
@@ -233,7 +232,6 @@ function savePharmacy() {
                 localHistory.unshift(data);
                 localStorage.setItem("pharmacyHistoryList", JSON.stringify(localHistory));
             } catch(e) { console.error("Ошибка локальной истории:", e); }
-
 
             showPharmacyCard(data);
         },
@@ -262,8 +260,8 @@ function showPharmacyCard(data) {
                 <p style="margin-bottom:6px;">📞 Телефон: <b style="color:var(--white);">${data.lprPhone}</b></p>
                 <p style="margin-bottom:6px;">💻 ПО: <b style="color:var(--white);">${data.software}</b></p>
                 <p>📊 Статус: <b style="color:var(--teal);">${statusLabels[data.status] || data.status}</b></p>
-                <p>📍 Локация: 
-                    <a href="${data.map}" target="_blank" style="color:var(--accent); text-decoration:none;">
+                <p style="margin-top:6px;">📍 Локация: 
+                    <a href="${data.map}" target="_blank" style="color:var(--accent); text-decoration:none; font-weight:bold;">
                         Открыть в Google Maps
                     </a>
                 </p>
@@ -305,7 +303,7 @@ function renderPharmacyHistory() {
     list.innerHTML = history.map(item => `
         <div class="history-item" style="line-height:1.6; background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px; margin-bottom:10px;">
             <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px;">
-                <span>📅 ${item.date || '—'}</span>
+                <span>📅 ${item.date || '—'} ${item.time || ''}</span>
                 <span style="color:var(--teal);font-weight:500;">${statusLabels[item.status] || item.status}</span>
             </div>
             <div style="font-size:16px;font-weight:700;color:var(--white);margin-bottom:6px;">🏥 ${item.name}</div>
@@ -313,13 +311,71 @@ function renderPharmacyHistory() {
             <div style="font-size:13px;color:var(--muted);">📞 Тел: <b style="color:var(--white);">${item.lprPhone}</b></div>
             <div style="font-size:13px;color:var(--muted);">💻 ПО: <b style="color:var(--white);">${item.software}${item.softwareId ? ' (ID: '+item.softwareId+')' : ''}</b></div>
             ${item.comment ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.05);font-size:13px;color:var(--muted);font-style:italic;">💬 ${item.comment}</div>` : ""}
-            ${item.map ? `
-                <a href="${item.map}" target="_blank" style="display:inline-block;margin-top:8px;font-size:13px;color:var(--accent);text-decoration:none;">
+            ${item.latitude ? `
+                <a href="https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}" target="_blank" style="display:inline-block;margin-top:8px;font-size:13px;color:var(--accent);text-decoration:none;font-weight:500;">
                     📍 Открыть локацию в Google Maps
                 </a>
             ` : ""}
         </div>
     `).join("");
+}
+
+// =========================
+// ЛОГИКА ПОСТРОЕНИЯ МАРШРУТОВ НА КАРТЕ
+// =========================
+
+function openMapForToday() {
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+    
+    const today = new Date().toLocaleDateString("ru-RU");
+    const todayPharms = history.filter(p => p.date === today && p.latitude && p.longitude);
+
+    if (todayPharms.length === 0) {
+        showToast("📭 Сегодня аптек с геолокацией нет");
+        return;
+    }
+
+    todayPharms.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    openGoogleMapsWithPoints(todayPharms);
+}
+
+function openMapForPeriod(days) {
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+    
+    const from = Date.now() - days * 86400000;
+    const filtered = history.filter(p => p.timestamp && p.timestamp >= from && p.latitude && p.longitude);
+
+    if (filtered.length === 0) {
+        showToast(`📭 За ${days} дней аптек с геолокацией нет`);
+        return;
+    }
+
+    filtered.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    openGoogleMapsWithPoints(filtered);
+}
+
+function openGoogleMapsWithPoints(pharmacies) {
+    if (pharmacies.length === 1) {
+        const p = pharmacies[0];
+        window.open(`https://www.google.com/maps/search/?api=1&query=${p.latitude},${p.longitude}`, "_blank");
+        return;
+    }
+
+    const origin = `${pharmacies[0].latitude},${pharmacies[0].longitude}`;
+    const destination = `${pharmacies[pharmacies.length - 1].latitude},${pharmacies[pharmacies.length - 1].longitude}`;
+
+    const waypoints = pharmacies.slice(1, -1)
+        .map(p => `${p.latitude},${p.longitude}`)
+        .join("|");
+
+    let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking`;
+    if (waypoints) {
+        url += `&waypoints=${encodeURIComponent(waypoints)}`;
+    }
+
+    window.open(url, "_blank");
 }
 
 // =========================
@@ -361,7 +417,6 @@ function setupPhoneMask() {
 // =========================
 
 function addPharmacyStat() {
-    const p = Number(localStorage.getItem("dayPlan") || 10);
     let f = Number(localStorage.getItem("dayFact") || 0);
     f += 1;
     localStorage.setItem("dayFact", f);
@@ -372,19 +427,24 @@ function renderProfile() {
         if(document.getElementById("prof_name")) document.getElementById("prof_name").innerText = user.first_name || "Сотрудник";
         if(document.getElementById("prof_tg")) document.getElementById("prof_tg").innerText = user.username ? `@${user.username}` : `@id${chatId}`;
         
-        // Первая буква имени в аватарку
         const avatarEl = document.getElementById("prof_avatar");
         if(avatarEl && user.first_name) {
             avatarEl.innerText = user.first_name.charAt(0).toUpperCase();
         }
     }
     
-    // Вывод количества отработанных смен из истории смен
     try {
         let shiftHistory = JSON.parse(localStorage.getItem("shift_history") || "[]");
-        if(document.getElementById("stat_fact")) document.getElementById("stat_fact").innerText = shiftHistory.length;
+        if(document.getElementById("stat_shifts_count")) document.getElementById("stat_shifts_count").innerText = shiftHistory.length;
     } catch(e) {
-        if(document.getElementById("stat_fact")) document.getElementById("stat_fact").innerText = "0";
+        if(document.getElementById("stat_shifts_count")) document.getElementById("stat_shifts_count").innerText = "0";
+    }
+
+    try {
+        let pharmHistory = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]");
+        if(document.getElementById("stat_pharmacies_count")) document.getElementById("stat_pharmacies_count").innerText = pharmHistory.length;
+    } catch(e) {
+        if(document.getElementById("stat_pharmacies_count")) document.getElementById("stat_pharmacies_count").innerText = "0";
     }
 }
 
@@ -413,7 +473,6 @@ function startShift() {
             function(pos) {
                 const lat = pos.coords.latitude;
                 const lon = pos.coords.longitude;
-
                 shiftStartLocation = { lat, lon };
 
                 showToast("🟢 Смена успешно начата");
@@ -444,7 +503,7 @@ function saveDailyPlan() {
     localStorage.setItem("dayPlan", val);
     showToast("✅ План на день обновлен");
     renderDailyPlan();
-    planInput.value = ""; // очищаем поле ввода
+    planInput.value = "";
 }
 
 function endShift() {
@@ -458,26 +517,18 @@ function endShift() {
     showToast("🔴 Получаем финальную локацию...");
 
     function finish(endLoc = null) {
-
         const historyItem = {
             date: new Date(Number(start)).toLocaleDateString("ru-RU"),
             start: new Date(Number(start)).toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'}),
             end: new Date(end).toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'}),
             duration: durationMin,
             fact: localStorage.getItem("dayFact") || 0,
-
             startLat: shiftStartLocation?.lat || null,
             startLon: shiftStartLocation?.lon || null,
             endLat: endLoc?.lat || null,
             endLon: endLoc?.lon || null,
-
-            startMap: shiftStartLocation
-                ? `https://www.google.com/maps?q=${shiftStartLocation.lat},${shiftStartLocation.lon}`
-                : null,
-
-            endMap: endLoc
-                ? `https://www.google.com/maps?q=${endLoc.lat},${endLoc.lon}`
-                : null
+            startMap: shiftStartLocation ? `https://www.google.com/maps/search/?api=1&query=${shiftStartLocation.lat},${shiftStartLocation.lon}` : null,
+            endMap: endLoc ? `https://www.google.com/maps/search/?api=1&query=${endLoc.lat},${endLoc.lon}` : null
         };
 
         let history = JSON.parse(localStorage.getItem("shift_history") || "[]");
@@ -504,15 +555,10 @@ function endShift() {
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             function(pos) {
-                shiftEndLocation = {
-                    lat: pos.coords.latitude,
-                    lon: pos.coords.longitude
-                };
+                shiftEndLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude };
                 finish(shiftEndLocation);
             },
-            function() {
-                finish(null);
-            }
+            function() { finish(null); }
         );
     } else {
         finish(null);
@@ -572,13 +618,10 @@ function validatePharmacyForm() {
     if (!saveBtn) return;
 
     let valid = true;
-
-    // проверка обязательных полей
     if (!name) valid = false;
     if (!status) valid = false;
     if (!lprPhone || lprPhone.length < 19) valid = false;
 
-    // если LEKKO или ABU — нужен ID
     if (software === "LEKKO" || software === "ABU") {
         if (!softwareId || softwareId.length !== 9) valid = false;
     }
@@ -601,9 +644,8 @@ function renderHistory() {
             <p>📅 Дата: <b>${item.date}</b></p>
             <p>⏱ Время: <b>${item.start} - ${item.end}</b> (${item.duration} мин)</p>
             <p>🏪 Посещено аптек: <b style="color:var(--teal);">${item.fact}</b></p>
-
-            ${item.startMap ? `<p>📍 Старт: <a href="${item.startMap}" target="_blank">открыть</a></p>` : ""}
-            ${item.endMap ? `<p>📍 Финиш: <a href="${item.endMap}" target="_blank">открыть</a></p>` : ""}
+            ${item.startMap ? `<p style="margin-top:6px;">📍 Старт: <a href="${item.startMap}" target="_blank" style="color:var(--accent); text-decoration:none;">открыть карту</a></p>` : ""}
+            ${item.endMap ? `<p>📍 Финиш: <a href="${item.endMap}" target="_blank" style="color:var(--accent); text-decoration:none;">открыть карту</a></p>` : ""}
         </div>
     `).join("");
 }
@@ -614,15 +656,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupSoftwareIdMask();
     checkUndoWindow();
 
-    // 🔥 авто-валидация формы
-    const fields = [
-        "name",
-        "lpr_phone",
-        "pharmacy_status",
-        "software",
-        "software_id"
-    ];
-
+    const fields = ["name", "lpr_phone", "pharmacy_status", "software", "software_id"];
     fields.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -631,5 +665,5 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    validatePharmacyForm(); // стартовая проверка
+    validatePharmacyForm();
 });
