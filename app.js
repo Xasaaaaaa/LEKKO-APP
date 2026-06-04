@@ -490,6 +490,31 @@ function renderDailyPlan() {
     `;
 }
 
+function validatePharmacyForm() {
+    const name = document.getElementById("name")?.value.trim();
+    const lprPhone = document.getElementById("lpr_phone")?.value.trim();
+    const status = document.getElementById("pharmacy_status")?.value;
+    const software = document.getElementById("software")?.value;
+    const softwareId = document.getElementById("software_id")?.value.trim();
+
+    const saveBtn = document.getElementById("saveBtn");
+    if (!saveBtn) return;
+
+    let valid = true;
+
+    // проверка обязательных полей
+    if (!name) valid = false;
+    if (!status) valid = false;
+    if (!lprPhone || lprPhone.length < 19) valid = false;
+
+    // если LEKKO или ABU — нужен ID
+    if (software === "LEKKO" || software === "ABU") {
+        if (!softwareId || softwareId.length !== 9) valid = false;
+    }
+
+    saveBtn.disabled = !valid;
+}
+
 function renderHistory() {
     const list = document.getElementById("historyList");
     if (!list) return;
@@ -514,4 +539,23 @@ document.addEventListener("DOMContentLoaded", () => {
     setupPhoneMask();
     setupSoftwareIdMask();
     checkUndoWindow();
+
+    // 🔥 авто-валидация формы
+    const fields = [
+        "name",
+        "lpr_phone",
+        "pharmacy_status",
+        "software",
+        "software_id"
+    ];
+
+    fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener("input", validatePharmacyForm);
+            el.addEventListener("change", validatePharmacyForm);
+        }
+    });
+
+    validatePharmacyForm(); // стартовая проверка
 });
