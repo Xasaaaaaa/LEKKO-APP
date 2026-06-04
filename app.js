@@ -18,8 +18,10 @@ function getGreeting() {
     return "🌙 Доброй ночи";
 }
 
-document.getElementById("user").innerHTML =
-    user ? `${getGreeting()}, <b>${user.first_name}</b>! 👋` : "Пользователь не найден";
+if (document.getElementById("user")) {
+    document.getElementById("user").innerHTML =
+        user ? `${getGreeting()}, <b>${user.first_name}</b>! 👋` : "Пользователь не найден";
+}
 
 let photos = [];
 
@@ -181,7 +183,7 @@ function showPharmacyCard(data) {
                 ${data.software ? `
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <span style="color:#7a9ab8;">💻 Программа</span>
-                    <span style="color:#eef6f8;font-weight:500;">${data.software}</span>
+                    <span style="color:#eef6f8;font-weight:500;">${data.software}${data.softwareId ? ' (ID: ' + data.softwareId + ')' : ''}</span>
                 </div>` : ""}
 
                 ${data.status ? `
@@ -256,6 +258,13 @@ function clearPharmacyForm() {
     document.getElementById("software").value = "";
     document.getElementById("software_custom").value = "";
     document.getElementById("software_custom").style.display = "none";
+    
+    // Сброс и скрытие ID программы (Задачи 1, 2)
+    if (document.getElementById("software_id_container")) {
+        document.getElementById("software_id_container").style.display = "none";
+        document.getElementById("software_id").value = "";
+    }
+    
     document.getElementById("pharmacy_status").value = "";
     document.getElementById("contact_comment").value = "";
     clearPhotos();
@@ -442,8 +451,10 @@ window.addEventListener("DOMContentLoaded", () => {
         const startDate = new Date(Number(start));
         const formatted = startDate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
         const status = document.getElementById("shiftStatus");
-        status.style.display = "block";
-        status.innerHTML = `🟢 Смена начата в <b>${formatted}</b>`;
+        if (status) {
+            status.style.display = "block";
+            status.innerHTML = `🟢 Смена начата в <b>${formatted}</b>`;
+        }
         startShiftTimer();
     }
     checkUndoWindow();
@@ -538,8 +549,10 @@ function showUndoButton(seconds) {
     btn.onclick = undoEndShift;
 
     const shiftDiv = document.getElementById("shift");
-    const startBtn = shiftDiv.querySelector("button[onclick='startShift()']");
-    startBtn.parentNode.insertBefore(btn, startBtn);
+    if (shiftDiv) {
+        const startBtn = shiftDiv.querySelector("button[onclick='startShift()']");
+        if (startBtn) startBtn.parentNode.insertBefore(btn, startBtn);
+    }
 
     let timeLeft = seconds;
     const timer = setInterval(() => {
@@ -567,7 +580,7 @@ function undoEndShift() {
     localStorage.removeItem("shiftEndedData");
 
     const s = getStats();
-    localStorage.setItem("stat_shifts",       Math.max(0, s.shiftsCount - 1));
+    localStorage.setItem("stat_shifts", Math.max(0, s.shiftsCount - 1));
     localStorage.setItem("stat_totalMinutes", Math.max(0, s.totalMinutes - totalMinutes));
 
     const history = getShiftHistory();
@@ -578,9 +591,10 @@ function undoEndShift() {
     if (btn) { clearInterval(btn._timer); btn.remove(); }
 
     const status = document.getElementById("shiftStatus");
-    status.style.display = "block";
-    status.innerHTML = `🟢 Смена начата в <b>${startFormatted}</b>`;
-
+    if (status) {
+        status.style.display = "block";
+        status.innerHTML = `🟢 Смена начата в <b>${startFormatted}</b>`;
+    }
     startShiftTimer();
     showToast("✅ Смена восстановлена!");
 }
@@ -595,8 +609,10 @@ function openPage(page) {
         const el = document.getElementById(id);
         if (el) el.style.display = "none";
     });
-    document.getElementById(page).style.display = "block";
-    if (page === "shift")   { checkUndoWindow(); renderDailyPlan(); }
+    const target = document.getElementById(page);
+    if (target) target.style.display = "block";
+    
+    if (page === "shift") { checkUndoWindow(); renderDailyPlan(); }
     if (page === "profile") renderProfile();
     if (page === "history") renderHistory();
 }
@@ -611,224 +627,139 @@ function back() { openPage("dashboard"); }
 function renderProfile() {
     const s = getStats();
     const rank = getRank(s.shiftsCount);
-    const name = user?.first_name || "Сотрудник";
-    const username = user?.username ? `@${user.username}` : "";
-    const savedAvatar = localStorage.getItem("userAvatar");
-
-    const avatarContent = savedAvatar
-        ? `<img id="avatarImg" src="${savedAvatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
-        : `<span id="avatarLetter" style="font-size:36px;">${name.charAt(0).toUpperCase()}</span>`;
-
-    document.getElementById("profileContent").innerHTML = `
-        <div style="text-align:center;padding:20px 0 10px;">
-            <div style="width:84px;height:84px;border-radius:50%;background:linear-gradient(135deg,#20d2b4,#2edd8e);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;overflow:hidden;cursor:pointer;position:relative;box-shadow:0 0 24px rgba(32,210,180,0.3);" onclick="changeAvatar()">
-                ${avatarContent}
-                <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.45);font-size:11px;color:white;padding:3px 0;border-radius:0 0 50px 50px;">✏️</div>
-            </div>
-            <input type="file" id="avatarInput" accept="image/*" style="display:none;" onchange="onAvatarChange(event)">
-            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:22px;margin-top:8px;">${name}</div>
-            <div style="color:#7a9ab8;font-size:14px;margin-top:4px;">${username}</div>
-            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(32,210,180,0.1);border:1px solid rgba(32,210,180,0.2);border-radius:20px;padding:6px 16px;margin-top:12px;font-size:14px;color:#20d2b4;">${rank.icon} ${rank.label}</div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;">
-            <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;text-align:center;">
-                <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;background:linear-gradient(135deg,#20d2b4,#2edd8e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">${s.shiftsCount}</div>
-                <div style="font-size:13px;color:#7a9ab8;margin-top:4px;">Смен отработано</div>
-            </div>
-            <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;text-align:center;">
-                <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;background:linear-gradient(135deg,#20d2b4,#2edd8e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">${s.pharmaciesCount}</div>
-                <div style="font-size:13px;color:#7a9ab8;margin-top:4px;">Аптек загружено</div>
-            </div>
-            <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;text-align:center;">
-                <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700;background:linear-gradient(135deg,#20d2b4,#2edd8e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">${formatTime(s.totalMinutes)}</div>
-                <div style="font-size:13px;color:#7a9ab8;margin-top:4px;">Всего отработано</div>
-            </div>
-            <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;text-align:center;">
-                <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700;background:linear-gradient(135deg,#20d2b4,#2edd8e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">${formatTime(s.bestShift)}</div>
-                <div style="font-size:13px;color:#7a9ab8;margin-top:4px;">Рекорд смены</div>
-            </div>
-        </div>
-
-        <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;margin-top:12px;text-align:center;">
-            <div style="font-family:'Syne',sans-serif;font-size:32px;font-weight:700;color:#ffb547;">🔥 ${s.streak}</div>
-            <div style="font-size:13px;color:#7a9ab8;margin-top:4px;">Дней подряд на работе</div>
-        </div>
-
-        <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;margin-top:12px;font-size:14px;color:#7a9ab8;line-height:1.8;">
-            📊 ${getRankProgress(s.shiftsCount)}<br>
-            📅 Последняя смена: ${s.lastShiftDate || "—"}
-        </div>
-    `;
+    
+    if (document.getElementById("profileRankIcon")) document.getElementById("profileRankIcon").innerHTML = rank.icon;
+    if (document.getElementById("profileRankLabel")) document.getElementById("profileRankLabel").innerHTML = rank.label;
+    if (document.getElementById("profileProgress")) document.getElementById("profileProgress").innerHTML = getRankProgress(s.shiftsCount);
+    
+    if (document.getElementById("stat_shifts")) document.getElementById("stat_shifts").innerHTML = s.shiftsCount;
+    if (document.getElementById("stat_pharmacies")) document.getElementById("stat_pharmacies").innerHTML = s.pharmaciesCount;
+    if (document.getElementById("stat_time")) document.getElementById("stat_time").innerHTML = formatTime(s.totalMinutes);
+    if (document.getElementById("stat_streak")) document.getElementById("stat_streak").innerHTML = `${s.streak} 🔥`;
+    
+    loadAvatar();
 }
 
 
 // =========================
-// ИСТОРИЯ СМЕН
+// ИСТОРИЯ (ИНТЕРФЕЙС)
 // =========================
 
 function renderHistory() {
+    const list = document.getElementById("historyList");
+    if (!list) return;
     const history = getShiftHistory();
-    const el = document.getElementById("historyContent");
-
     if (history.length === 0) {
-        el.innerHTML = `
-            <div style="text-align:center;color:#7a9ab8;margin-top:60px;">
-                <div style="font-size:40px;margin-bottom:12px;">📭</div>
-                <div style="font-family:'Syne',sans-serif;font-size:16px;">История смен пока пуста</div>
-            </div>`;
+        list.innerHTML = `<div style="text-align:center;color:#7a9ab8;padding:40px 0;font-size:14px;">📭 История смен пуста</div>`;
         return;
     }
-
-    el.innerHTML = history.map((entry, i) => `
-        <div style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;margin-top:12px;line-height:1.9;">
-            <div style="font-family:'Syne',sans-serif;font-weight:600;font-size:13px;color:#20d2b4;margin-bottom:8px;letter-spacing:0.3px;">📅 ${entry.date}</div>
-            <div style="font-size:14px;">🟢 Начало: <b>${entry.start}</b></div>
-            <div style="font-size:14px;">🔴 Конец: <b>${entry.end}</b></div>
-            <div style="font-size:14px;">⏱ Отработано: <b>${entry.worked}</b></div>
-            ${entry.pharmacies ? `<div style="font-size:14px;">🏥 Аптек: <b>${entry.pharmacies}</b></div>` : ""}
-            ${entry.note
-                ? `<div style="margin-top:8px;padding:10px;background:#0d1829;border-radius:10px;font-size:13px;color:#7a9ab8;">📝 ${entry.note}</div>`
-                : `<div style="margin-top:8px;">
-                       <input id="note_${i}" placeholder="Добавить заметку о смене..." style="margin-top:4px;height:44px;font-size:14px;">
-                       <button onclick="saveNote(${i})" style="min-height:38px;font-size:14px;margin-top:6px;">💾 Сохранить заметку</button>
-                   </div>`
-            }
+    list.innerHTML = history.map(item => `
+        <div class="history-item" style="background:#111e30;border:1px solid rgba(32,210,180,0.15);border-radius:16px;padding:16px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:#7a9ab8;margin-bottom:6px;">
+                <span>📅 ${item.date}</span>
+                <span style="color:#20d2b4;font-weight:500;">⏱ ${item.worked}</span>
+            </div>
+            <div style="font-size:15px;font-weight:500;color:#eef6f8;">⏱ ${item.start} – ${item.end}</div>
+            ${item.pharmacies ? `<div style="margin-top:6px;font-size:13px;color:#2edd8e;">🏥 Посещено аптек: <b>${item.pharmacies}</b></div>` : ""}
         </div>
     `).join("");
 }
 
-function saveNote(index) {
-    const input = document.getElementById(`note_${index}`);
-    if (!input || !input.value.trim()) return;
-    const history = getShiftHistory();
-    if (history[index]) {
-        history[index].note = input.value.trim();
-        localStorage.setItem("shiftHistory", JSON.stringify(history));
-        renderHistory();
+
+// =========================
+// ДИНАМИЧЕСКИЙ ВВОД ПРОГРАММЫ (ЗАДАЧИ 1, 2)
+// =========================
+
+function toggleSoftwareInput() {
+    const select = document.getElementById("software");
+    const custom = document.getElementById("software_custom");
+    const idContainer = document.getElementById("software_id_container");
+    if (!select) return;
+
+    // Показываем поле ввода ID только для ABU и LEKKO
+    if (select.value === "ABU" || select.value === "LEKKO") {
+        if (idContainer) idContainer.style.display = "block";
+    } else {
+        if (idContainer) {
+            idContainer.style.display = "none";
+            const idInput = document.getElementById("software_id");
+            if (idInput) idInput.value = "";
+        }
+    }
+
+    // Кастомное поле для варианта "Другая"
+    if (select.value === "Другая") {
+        if (custom) custom.style.display = "block";
+    } else {
+        if (custom) {
+            custom.style.display = "none";
+            custom.value = "";
+        }
     }
 }
 
 
 // =========================
-// ФОТО АПТЕКИ
+// ФОТОГРАФИИ
 // =========================
 
-function openFilePicker() { document.getElementById("photo").click(); }
+function openFilePicker() {
+    document.getElementById("photo").click();
+}
 
 function previewPhotos() {
-    const files = document.getElementById("photo").files;
+    const files = Array.from(document.getElementById("photo").files);
     const container = document.getElementById("photoContainer");
-    for (let file of files) {
-        photos.push(file);
-        const img = document.createElement("img");
-        img.src = URL.createObjectURL(file);
-        container.appendChild(img);
-    }
+    if (!container) return;
+
+    files.forEach(file => {
+        if (photos.length >= 10) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            photos.push(e.target.result);
+            const div = document.createElement("div");
+            div.className = "photo-preview";
+            div.style.cssText = `
+                position:relative; width:70px; height:70px;
+                border-radius:10px; overflow:hidden; border:1px solid rgba(32,210,180,0.3);
+            `;
+            div.innerHTML = `
+                <img src="${e.target.result}" style="width:100%; height:100%; object-fit:cover;">
+                <span onclick="removePhoto(this, '${e.target.result}')" style="
+                    position:absolute; top:2px; right:2px; background:rgba(255,79,109,0.8);
+                    color:white; width:16px; height:16px; border-radius:50%; text-align:center;
+                    line-height:14px; font-size:12px; cursor:pointer; font-weight:bold;
+                ">×</span>
+            `;
+            container.appendChild(div);
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function removePhoto(btn, src) {
+    btn.parentNode.remove();
+    photos = photos.filter(p => p !== src);
 }
 
 function clearPhotos() {
     photos = [];
-    document.getElementById("photoContainer").innerHTML = "";
-    document.getElementById("photo").value = "";
+    const container = document.getElementById("photoContainer");
+    if (container) container.innerHTML = "";
+    const input = document.getElementById("photo");
+    if (input) input.value = "";
 }
 
 
 // =========================
-// МАСКА ТЕЛЕФОНА
-// =========================
-
-const phoneInput = document.getElementById("lpr_phone");
-
-phoneInput.addEventListener("focus", () => {
-    if (phoneInput.value === "") phoneInput.value = "+998 ";
-});
-
-phoneInput.addEventListener("input", function(e) {
-    let x = e.target.value.replace(/\D/g, "");
-    if (!x.startsWith("998")) x = "998" + x;
-    x = x.substring(0, 12);
-    let formatted = "+998";
-    if (x.length > 3)  formatted += " (" + x.substring(3, 5);
-    if (x.length >= 5) formatted += ") " + x.substring(5, 8);
-    if (x.length >= 8) formatted += "-" + x.substring(8, 10);
-    if (x.length >= 10) formatted += "-" + x.substring(10, 12);
-    e.target.value = formatted;
-});
-
-
-// =========================
-// СОХРАНЕНИЕ АПТЕКИ
-// =========================
-
-function savePharmacy() {
-    let softwareValue = document.getElementById("software").value;
-    if (softwareValue === "other") {
-        softwareValue = document.getElementById("software_custom").value;
-    }
-
-    const comment = document.getElementById("contact_comment").value.trim();
-    const name = document.getElementById("name").value;
-
-    if (!name)            { showToast("⚠️ Введите название аптеки"); return; }
-    if (photos.length === 0) { showToast("⚠️ Добавьте фото"); return; }
-
-    const pharmacyData = {
-        name,
-        lprName:     document.getElementById("lpr_name").value,
-        lprPhone:    document.getElementById("lpr_phone").value,
-        software:    softwareValue,
-        status:      document.getElementById("pharmacy_status").value,
-        comment,
-        photosCount: photos.length
-    };
-
-    navigator.geolocation.getCurrentPosition(
-        function(pos) {
-            const lat = pos.coords.latitude;
-            const lon = pos.coords.longitude;
-            const mapLink = `https://www.google.com/maps?q=${lat},${lon}`;
-
-            addPharmacyStat();
-            const fact = Number(localStorage.getItem("dayFact") || 0);
-            localStorage.setItem("dayFact", fact + 1);
-
-            sendToServer({
-                type: "PHARMACY_CREATED",
-                user: user?.first_name || null,
-                latitude: lat,
-                longitude: lon,
-                map: mapLink,
-                data: pharmacyData
-            });
-
-            showPharmacyCard(pharmacyData);
-        },
-        function() {
-            addPharmacyStat();
-            const fact = Number(localStorage.getItem("dayFact") || 0);
-            localStorage.setItem("dayFact", fact + 1);
-
-            sendToServer({
-                type: "PHARMACY_CREATED",
-                user: user?.first_name || null,
-                data: pharmacyData
-            });
-
-            showPharmacyCard(pharmacyData);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-}
-
-
-// =========================
-// НАЧАЛО СМЕНЫ
+// СТАРТ / СТОП СМЕНЫ
 // =========================
 
 function startShift() {
-    if (localStorage.getItem("shiftActive") === "true") {
-        showToast("🟢 Смена уже начата");
+    if (localStorage.getItem("shiftActive") === "true") return;
+
+    if (!navigator.geolocation) {
+        alert("❌ Геолокация не поддерживается вашим устройством.");
         return;
     }
 
@@ -836,56 +767,40 @@ function startShift() {
         function(pos) {
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
+            const now = Date.now();
+            const startFormatted = new Date(now).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
             const mapLink = `https://www.google.com/maps?q=${lat},${lon}`;
 
-            const startTime = new Date();
-            localStorage.setItem("shiftStart", startTime.getTime());
             localStorage.setItem("shiftActive", "true");
-
-            const formattedTime = startTime.toLocaleTimeString([], {
-                hour: '2-digit', minute: '2-digit'
-            });
-
-            const status = document.getElementById("shiftStatus");
-            status.style.display = "block";
-            status.innerHTML = `🟢 Смена начата в <b>${formattedTime}</b>`;
-
-            startShiftTimer();
+            localStorage.setItem("shiftStart", now);
 
             sendToServer({
-                type: "SHIFT_STARTED",
-                user: user?.first_name,
-                time: formattedTime,
+                event: "shift_start",
+                user: user,
+                startTime: startFormatted,
                 latitude: lat,
                 longitude: lon,
                 map: mapLink
             });
 
-            fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`)
-                .then(r => r.json())
-                .then(geo => {
-                    const address = geo.display_name || `${lat}, ${lon}`;
-                    alert(`🟢 Смена начата в ${formattedTime}\n\n📍 Локация:\n${address}\n\n🗺 Google Maps:\n${mapLink}`);
-                })
-                .catch(() => {
-                    alert(`🟢 Смена начата в ${formattedTime}\n\n📍 Координаты: ${lat}, ${lon}\n\n🗺 Google Maps:\n${mapLink}`);
-                });
+            const status = document.getElementById("shiftStatus");
+            if (status) {
+                status.style.display = "block";
+                status.innerHTML = `🟢 Смена начата в <b>${startFormatted}</b>`;
+            }
+            startShiftTimer();
+            showToast("🟢 Смена успешно открыта!");
         },
-        function() {
-            alert("❌ Не удалось получить геолокацию.\nРазрешите GPS в Telegram.");
-        },
+        function() { alert("❌ Не удалось получить геолокацию для старта смены."); },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
 }
 
-
-// =========================
-// ЗАВЕРШЕНИЕ СМЕНЫ
-// =========================
-
 function endShift() {
-    if (localStorage.getItem("shiftActive") !== "true") {
-        showToast("❌ Смена не начата");
+    if (localStorage.getItem("shiftActive") !== "true") return;
+
+    if (!navigator.geolocation) {
+        alert("❌ Геолокация не поддерживается.");
         return;
     }
 
@@ -893,56 +808,48 @@ function endShift() {
         function(pos) {
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
+            const start = Number(localStorage.getItem("shiftStart"));
+            const elapsed = Date.now() - start;
+
+            const hours = Math.floor(elapsed / 3600000);
+            const minutes = Math.floor((elapsed % 3600000) / 60000);
+            const workedText = `${hours}ч ${minutes}м`;
+            const endFormatted = new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+            const motivation = getMotivation(hours, minutes);
             const mapLink = `https://www.google.com/maps?q=${lat},${lon}`;
 
-            const endTime   = new Date();
-            const startDate = new Date(Number(localStorage.getItem("shiftStart")));
-            const workedMs  = endTime - startDate;
-
-            const hours        = Math.floor(workedMs / 3600000);
-            const minutes      = Math.floor((workedMs % 3600000) / 60000);
-            const totalMinutes = hours * 60 + minutes;
-            const workedText   = `${hours}ч ${minutes}м`;
-
-            const startFormatted = startDate.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
-            const endFormatted   = endTime.toLocaleTimeString([],   { hour:'2-digit', minute:'2-digit' });
-            const today          = new Date().toLocaleDateString("ru-RU");
-            const motivation     = getMotivation(hours, minutes);
-
-            addShiftStat(totalMinutes);
             stopShiftTimer();
-
-            saveShiftToHistory({
-                date:       today,
-                start:      startFormatted,
-                end:        endFormatted,
-                worked:     workedText,
-                pharmacies: localStorage.getItem("dayFact") || 0,
-                note:       ""
-            });
-
             const status = document.getElementById("shiftStatus");
-            status.style.display = "block";
-            status.innerHTML =
-                `🟢 Смена начата в <b>${startFormatted}</b><br>` +
-                `🔴 Завершена в <b>${endFormatted}</b><br>` +
-                `⏱ Отработано: <b>${workedText}</b><br><br>` +
-                `${motivation}`;
+            if (status) {
+                status.style.display = "none";
+                status.innerHTML = "";
+            }
+
+            const todayStr = new Date().toLocaleDateString("ru-RU");
+            const fact = Number(localStorage.getItem("dayFact") || 0);
+
+            addShiftStat(hours * 60 + minutes);
+            saveShiftToHistory({
+                date: todayStr,
+                start: new Date(start).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }),
+                end: endFormatted,
+                worked: workedText,
+                pharmacies: fact
+            });
 
             localStorage.setItem("shiftEndedAt", Date.now());
             localStorage.setItem("shiftEndedData", JSON.stringify({
-                startTime: startDate.getTime(),
-                startFormatted,
-                totalMinutes
+                startTime: start,
+                startFormatted: new Date(start).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }),
+                totalMinutes: hours * 60 + minutes
             }));
 
-            showUndoButton(60);
-
             sendToServer({
-                type: "SHIFT_ENDED",
-                user: user?.first_name,
-                time: endFormatted,
+                event: "shift_end",
+                user: user,
                 worked: workedText,
+                startTime: new Date(start).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }),
+                endTime: endFormatted,
                 latitude: lat,
                 longitude: lon,
                 map: mapLink
@@ -968,17 +875,63 @@ function endShift() {
 
 
 // =========================
-// ПЕРЕКЛЮЧЕНИЕ ПРОГРАММЫ
+// СОХРАНЕНИЕ АПТЕКИ
 // =========================
 
-function toggleSoftwareInput() {
-    const select = document.getElementById("software");
-    const custom = document.getElementById("software_custom");
-    if (!select || !custom) return;
-    if (select.value === "other") {
-        custom.style.display = "block";
-    } else {
-        custom.style.display = "none";
-        custom.value = "";
+function savePharmacy() {
+    const name = document.getElementById("name").value.trim();
+    const lprName = document.getElementById("lpr_name").value.trim();
+    const lprPhone = document.getElementById("lpr_phone").value.trim();
+    let software = document.getElementById("software").value;
+    const softwareCustom = document.getElementById("software_custom").value.trim();
+    const softwareId = document.getElementById("software_id")?.value.trim() || null;
+    const status = document.getElementById("pharmacy_status").value;
+    const comment = document.getElementById("contact_comment").value.trim();
+
+    if (!name) { showToast("⚠️ Укажите название аптеки"); return; }
+    if (!status) { showToast("⚠️ Выберите статус контакта"); return; }
+    if (software === "Другая") software = softwareCustom || "Другая";
+
+    if (!navigator.geolocation) {
+        alert("❌ Геолокация не поддерживается вашим устройством.");
+        return;
     }
+
+    showToast("🛰 Получение геолокации...");
+
+    navigator.geolocation.getCurrentPosition(
+        function(pos) {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            const mapLink = `https://www.google.com/maps?q=${lat},${lon}`;
+
+            const data = {
+                event: "pharmacy_add",
+                user: user,
+                name: name,
+                lprName: lprName,
+                lprPhone: lprPhone,
+                software: software,
+                softwareId: softwareId, // Передаем ID на сервер
+                status: status,
+                comment: comment,
+                photosCount: photos.length,
+                latitude: lat,
+                longitude: lon,
+                map: mapLink
+            };
+
+            sendToServer(data);
+            addPharmacyStat();
+
+            const fact = Number(localStorage.getItem("dayFact") || 0);
+            localStorage.setItem("dayFact", fact + 1);
+
+            showPharmacyCard(data);
+        },
+        function() {
+            alert("❌ Не удалось получить локацию аптеки. Запись отменена.");
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
 }

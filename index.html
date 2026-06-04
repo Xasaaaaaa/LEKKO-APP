@@ -351,21 +351,33 @@ button:active { transform: scale(0.97); filter: brightness(0.9); }
 </div>
 
 
-<!-- АПТЕКА -->
 <div id="pharmacy" style="display:none;">
     <button class="back-btn" onclick="back()">← Назад</button>
     <div class="section-title"><span>🏥</span> Новая аптека</div>
     <input id="name" placeholder="Название аптеки">
     <input id="lpr_name" placeholder="ЛПР (имя)">
     <input type="tel" id="lpr_phone" placeholder="+998 (__) ___-__-__" maxlength="19">
+    
     <select id="software" onchange="toggleSoftwareInput()">
-        <option value="">Выберите программу</option>
-        <option value="OSON APTEKA">OSON APTEKA</option>
-        <option value="FOM">FOM</option>
+        <option value="" disabled selected>💻 Какая программа используется?</option>
         <option value="ABU">ABU</option>
-        <option value="other">➕ Другое</option>
+        <option value="LEKKO">LEKKO</option>
+        <option value="FOM - F-Summary (аналог Мегапрайс)">FOM - F-Summary (аналог Мегапрайс)</option>
+        <option value="FOM Склад">FOM Склад</option>
+        <option value="ОСОН Прайс">ОСОН Прайс</option>
+        <option value="ОСОН Склад">ОСОН Склад</option>
+        <option value="1C">1С</option>
+        <option value="SmartPharma">SmartPharma</option>
+        <option value="QulayApteka">QulayApteka</option>
+        <option value="other">➕ Другое (ввести вручную)</option>
     </select>
+    
+    <div id="software_id_container" style="display: none; margin-bottom: 12px;">
+        <input type="text" id="software_id" placeholder="🆔 Введите ID программы">
+    </div>
+
     <input id="software_custom" placeholder="Введите свою программу" style="display:none;">
+    
     <select id="pharmacy_status">
         <option value="">Статус контакта</option>
         <option value="cold">❄️ Холодный контакт</option>
