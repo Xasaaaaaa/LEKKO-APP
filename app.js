@@ -234,8 +234,6 @@ function savePharmacy() {
                 localStorage.setItem("pharmacyHistoryList", JSON.stringify(localHistory));
             } catch(e) { console.error("Ошибка локальной истории:", e); }
 
-            const fact = Number(localStorage.getItem("dayFact") || 0);
-            localStorage.setItem("dayFact", fact + 1);
 
             showPharmacyCard(data);
         },
