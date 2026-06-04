@@ -206,7 +206,7 @@ function savePharmacy() {
         function(pos) {
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
-            const mapLink = `http://googleusercontent.com/maps.google.com/?q=${lat},${lon}`;
+            const mapLink = `https://www.google.com/maps?q=${lat},${lon}`;
 
             const data = {
                 event: "pharmacy_add",
@@ -264,6 +264,11 @@ function showPharmacyCard(data) {
                 <p style="margin-bottom:6px;">📞 Телефон: <b style="color:var(--white);">${data.lprPhone}</b></p>
                 <p style="margin-bottom:6px;">💻 ПО: <b style="color:var(--white);">${data.software}</b></p>
                 <p>📊 Статус: <b style="color:var(--teal);">${statusLabels[data.status] || data.status}</b></p>
+                <p>📍 Локация: 
+                    <a href="${data.map}" target="_blank" style="color:var(--accent); text-decoration:none;">
+                        Открыть в Google Maps
+                    </a>
+                </p>
             </div>
             
             <button onclick="document.getElementById('pharmacyModal').remove(); openPage('pharmacy_history_page');" style="margin-bottom:10px; background:linear-gradient(135deg, var(--teal), var(--teal2)); color:#080f1a;">🏢 История аптек</button>
@@ -310,7 +315,11 @@ function renderPharmacyHistory() {
             <div style="font-size:13px;color:var(--muted);">📞 Тел: <b style="color:var(--white);">${item.lprPhone}</b></div>
             <div style="font-size:13px;color:var(--muted);">💻 ПО: <b style="color:var(--white);">${item.software}${item.softwareId ? ' (ID: '+item.softwareId+')' : ''}</b></div>
             ${item.comment ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.05);font-size:13px;color:var(--muted);font-style:italic;">💬 ${item.comment}</div>` : ""}
-            ${item.map ? `<a href="${item.map}" target="_blank" style="display:inline-block;margin-top:8px;font-size:13px;color:var(--accent);text-decoration:none;">📍 На карте</a>` : ""}
+            ${item.map ? `
+                <a href="${item.map}" target="_blank" style="display:inline-block;margin-top:8px;font-size:13px;color:var(--accent);text-decoration:none;">
+                    📍 Открыть локацию в Google Maps
+                </a>
+            ` : ""}
         </div>
     `).join("");
 }
