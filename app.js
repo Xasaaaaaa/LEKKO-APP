@@ -36,6 +36,21 @@ function sendToServer(data) {
     }).catch(err => console.error("Ошибка отправки:", err));
 }
 
+function setupSoftwareIdMask() {
+    const input = document.getElementById("software_id");
+    if (!input) return;
+
+    input.addEventListener("input", () => {
+        let val = input.value;
+
+        val = val.replace(/\D/g, "");
+
+        val = val.slice(0, 9);
+
+        input.value = val;
+    });
+}
+
 // =========================
 // НАВИГАЦИЯ МЕЖДУ СТРАНИЦАМИ
 // =========================
@@ -346,13 +361,24 @@ function addPharmacyStat() {
 }
 
 function renderProfile() {
-    if(document.getElementById("prof_name")) document.getElementById("prof_name").innerText = user ? user.first_name : "Сотрудник";
-    if(document.getElementById("prof_id")) document.getElementById("prof_id").innerText = chatId ? chatId : "-";
+    if (user) {
+        if(document.getElementById("prof_name")) document.getElementById("prof_name").innerText = user.first_name || "Сотрудник";
+        if(document.getElementById("prof_tg")) document.getElementById("prof_tg").innerText = user.username ? `@${user.username}` : `@id${chatId}`;
+        
+        // Первая буква имени в аватарку
+        const avatarEl = document.getElementById("prof_avatar");
+        if(avatarEl && user.first_name) {
+            avatarEl.innerText = user.first_name.charAt(0).toUpperCase();
+        }
+    }
     
-    const p = localStorage.getItem("dayPlan") || 10;
-    const f = localStorage.getItem("dayFact") || 0;
-    if(document.getElementById("stat_plan")) document.getElementById("stat_plan").innerText = p;
-    if(document.getElementById("stat_fact")) document.getElementById("stat_fact").innerText = f;
+    // Вывод количества отработанных смен из истории смен
+    try {
+        let shiftHistory = JSON.parse(localStorage.getItem("shift_history") || "[]");
+        if(document.getElementById("stat_fact")) document.getElementById("stat_fact").innerText = shiftHistory.length;
+    } catch(e) {
+        if(document.getElementById("stat_fact")) document.getElementById("stat_fact").innerText = "0";
+    }
 }
 
 // =========================
@@ -369,6 +395,22 @@ function startShift() {
     showToast("🟢 Смена успешно начата");
     checkUndoWindow();
     renderDailyPlan();
+}
+
+function saveDailyPlan() {
+    const planInput = document.getElementById("dayPlanInput");
+    if (!planInput) return;
+    
+    const val = planInput.value.trim();
+    if (!val) {
+        showToast("⚠️ Введите количество аптек");
+        return;
+    }
+    
+    localStorage.setItem("dayPlan", val);
+    showToast("✅ План на день обновлен");
+    renderDailyPlan();
+    planInput.value = ""; // очищаем поле ввода
 }
 
 function endShift() {
@@ -470,5 +512,6 @@ function renderHistory() {
 // Инициализация при загрузке страницы
 document.addEventListener("DOMContentLoaded", () => {
     setupPhoneMask();
+    setupSoftwareIdMask();
     checkUndoWindow();
 });
