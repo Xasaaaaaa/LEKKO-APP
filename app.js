@@ -1,4 +1,3 @@
-
 const tg = window.Telegram.WebApp;
 tg.expand();
 
@@ -21,16 +20,16 @@ function getGreeting() {
 function renderDashboard() {
     const fact = Number(localStorage.getItem("dayFact") || 0);
     const plan = Number(localStorage.getItem("dayPlan") || 0);
- 
+
     const factEl = document.getElementById("dash_fact");
     const pctEl = document.getElementById("dash_pct");
     const barEl = document.getElementById("dash_bar");
     const labelEl = document.getElementById("dash_label");
     const remainEl = document.getElementById("dash_remain");
     const timeEl = document.getElementById("dash_time");
- 
+
     if (factEl) factEl.textContent = fact;
- 
+
     if (plan > 0) {
         const pct = Math.round((fact / plan) * 100);
         if (pctEl) pctEl.textContent = pct + "%";
@@ -44,7 +43,7 @@ function renderDashboard() {
         if (labelEl) labelEl.textContent = "План не задан";
         if (remainEl) remainEl.textContent = "";
     }
- 
+
     const shiftStart = localStorage.getItem("shift_start");
     if (shiftStart && timeEl) {
         const elapsed = Date.now() - Number(shiftStart);
@@ -55,7 +54,7 @@ function renderDashboard() {
         timeEl.textContent = "—";
     }
 }
- 
+
 if (document.getElementById("user")) {
     document.getElementById("user").innerHTML =
         user ? `${getGreeting()}, <b>${user.first_name}</b>! 👋` : "Пользователь не найден";
@@ -733,11 +732,9 @@ function initMap() {
         return;
     }
 
-    // Default center Tashkent
     mapInstance = L.map('map-canvas').setView([41.311081, 69.240562], 12);
     mapMarkersGroup = L.featureGroup().addTo(mapInstance);
 
-    // Dark tiles (CartoDB Dark Matter)
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
         subdomains: 'abcd',
