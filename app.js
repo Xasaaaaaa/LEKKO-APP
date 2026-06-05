@@ -18,7 +18,21 @@ function getGreeting() {
 }
 
 function renderDashboard() {
-    const fact = Number(localStorage.getItem("dayFact") || 0);
+    // Сбрасываем dayFact если это новый день
+    const today = new Date().toLocaleDateString("ru-RU");
+    const lastDay = localStorage.getItem("lastFactDay");
+    if (lastDay !== today) {
+        localStorage.setItem("dayFact", 0);
+        localStorage.setItem("lastFactDay", today);
+    }
+
+    // Считаем аптеки из реальной истории за сегодня
+    let fact = 0;
+    try {
+        const history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]");
+        fact = history.filter(p => p.date === today).length;
+    } catch(e) {}
+
     const plan = Number(localStorage.getItem("dayPlan") || 0);
 
     const factEl = document.getElementById("dash_fact");
