@@ -1,3 +1,4 @@
+
 const tg = window.Telegram.WebApp;
 tg.expand();
 
@@ -17,10 +18,50 @@ function getGreeting() {
     return "🌙 Доброй ночи";
 }
 
+function renderDashboard() {
+    const fact = Number(localStorage.getItem("dayFact") || 0);
+    const plan = Number(localStorage.getItem("dayPlan") || 0);
+ 
+    const factEl = document.getElementById("dash_fact");
+    const pctEl = document.getElementById("dash_pct");
+    const barEl = document.getElementById("dash_bar");
+    const labelEl = document.getElementById("dash_label");
+    const remainEl = document.getElementById("dash_remain");
+    const timeEl = document.getElementById("dash_time");
+ 
+    if (factEl) factEl.textContent = fact;
+ 
+    if (plan > 0) {
+        const pct = Math.round((fact / plan) * 100);
+        if (pctEl) pctEl.textContent = pct + "%";
+        if (barEl) barEl.style.width = Math.min(pct, 100) + "%";
+        if (labelEl) labelEl.textContent = fact + " из " + plan + " аптек по плану";
+        const rem = plan - fact;
+        if (remainEl) remainEl.textContent = rem > 0 ? "+" + rem + " осталось" : "✓ план выполнен";
+    } else {
+        if (pctEl) pctEl.textContent = "—";
+        if (barEl) barEl.style.width = "0%";
+        if (labelEl) labelEl.textContent = "План не задан";
+        if (remainEl) remainEl.textContent = "";
+    }
+ 
+    const shiftStart = localStorage.getItem("shift_start");
+    if (shiftStart && timeEl) {
+        const elapsed = Date.now() - Number(shiftStart);
+        const h = Math.floor(elapsed / 3600000);
+        const m = Math.floor((elapsed % 3600000) / 60000);
+        timeEl.textContent = h > 0 ? h + "ч " + m + "м" : m + "м";
+    } else if (timeEl) {
+        timeEl.textContent = "—";
+    }
+}
+ 
 if (document.getElementById("user")) {
     document.getElementById("user").innerHTML =
         user ? `${getGreeting()}, <b>${user.first_name}</b>! 👋` : "Пользователь не найден";
 }
+
+renderDashboard();
 
 let photos = [];
 
@@ -79,6 +120,7 @@ function openPage(page) {
 
 function back() {
     openPage("dashboard");
+    renderDashboard();
 }
 
 // =========================

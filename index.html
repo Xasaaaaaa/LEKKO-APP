@@ -254,7 +254,6 @@ button:disabled {
     padding: 10px;
 }
 
-/* Leaflet dark theme styling overrides */
 .leaflet-popup-content-wrapper, .leaflet-popup-tip {
     background-color: var(--card) !important;
     color: var(--white) !important;
@@ -282,6 +281,32 @@ button:disabled {
         <div class="app-title">LEKKO</div>
     </div>
     <p class="user-greeting" id="user">Загрузка...</p>
+
+    <div id="todayDashboard" style="background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 14px 16px; margin-bottom: 16px;">
+        <div style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Сегодня</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; margin-bottom: 12px;">
+            <div style="text-align: center;">
+                <div id="dash_fact" style="font-size: 22px; font-weight: 700; color: var(--white);">0</div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">аптек</div>
+            </div>
+            <div style="text-align: center; border-left: 1px solid var(--border); border-right: 1px solid var(--border);">
+                <div id="dash_time" style="font-size: 22px; font-weight: 700; color: var(--white);">—</div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">в смене</div>
+            </div>
+            <div style="text-align: center;">
+                <div id="dash_pct" style="font-size: 22px; font-weight: 700; color: var(--teal);">—</div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">план</div>
+            </div>
+        </div>
+        <div style="background: var(--bg2); border-radius: 6px; height: 5px; overflow: hidden;">
+            <div id="dash_bar" style="width: 0%; height: 100%; background: var(--teal); border-radius: 6px; transition: width 0.5s ease;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+            <span id="dash_label" style="font-size: 11px; color: var(--muted);">План не задан</span>
+            <span id="dash_remain" style="font-size: 11px; color: var(--teal);"></span>
+        </div>
+    </div>
+
     <div class="menu-grid">
         <div class="menu-card accent" onclick="openPage('pharmacy')">
             <div class="icon">🏥</div>
