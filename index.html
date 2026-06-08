@@ -43,26 +43,35 @@ body {
     flex-direction: column;
 }
 
-.app-header {
+/* ИСПРАВЛЕННЫЙ БЛОК: ИКОНКА И НАДПИСЬ РЯДОМ */
+.logo-wrap {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: row; /* Элементы стоят горизонтально в один ряд */
+    align-items: center; /* Центрирование иконки и текста по вертикали */
+    gap: 12px;           /* Расстояние между зеленой иконкой и текстом */
+    margin-top: 12px;
     margin-bottom: 4px;
-    margin-top: 8px;
 }
-.logo-icon { font-size: 28px; }
-.app-title {
+
+.logo-icon {
+    width: 52px;         /* Оптимальный мобильный размер как на скрине */
+    height: 52px;
+    object-fit: contain;
+}
+
+.logo-text {
     font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 24px;
+    font-weight: 700;
+    font-size: 36px;     /* Размер шрифта LEKKO */
     letter-spacing: 1px;
-    background: linear-gradient(135deg, var(--accent), var(--teal));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #ffffff;
+    line-height: 1;      /* Предотвращает смещение текста вниз */
 }
+
 .user-greeting {
-    font-size: 14px;
+    font-size: 15px;
     color: var(--muted);
+    margin-top: 8px;
     margin-bottom: 24px;
 }
 .user-greeting b { color: var(--white); }
@@ -211,6 +220,7 @@ button:disabled {
     gap: 8px;
     margin-bottom: 12px;
 }
+
 .img-preview {
     width: 100%;
     aspect-ratio: 1;
@@ -255,9 +265,9 @@ button:disabled {
 <body>
 
 <div id="dashboard">
-    <div class="app-header">
-        <div class="logo-icon">💊</div>
-        <div class="app-title">LEKKO</div>
+    <div class="logo-wrap">
+        <img src="image.png" class="logo-icon">
+        <div class="logo-text">LEKKO</div>
     </div>
     <p class="user-greeting" id="user">Загрузка...</p>
 
