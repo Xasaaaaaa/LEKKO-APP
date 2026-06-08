@@ -453,6 +453,7 @@ async def main():
 
     app_web = web.Application()
     app_web.router.add_post("/event", handle_event)
+    app_web.router.add_route("OPTIONS", "/event", handle_event)
     
     runner = web.AppRunner(app_web)
     await runner.setup()
