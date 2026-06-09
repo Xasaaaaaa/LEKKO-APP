@@ -43,36 +43,39 @@ body {
     flex-direction: column;
 }
 
-/* ИСПРАВЛЕННЫЙ БЛОК: ИКОНКА И НАДПИСЬ РЯДОМ */
 .logo-wrap {
     display: flex;
-    flex-direction: row; /* Элементы стоят горизонтально в один ряд */
-    align-items: center; /* Центрирование иконки и текста по вертикали */
-    gap: 12px;           /* Расстояние между зеленой иконкой и текстом */
+    flex-direction: row;    
+    align-items: center;   
+    gap: 14px;               
     margin-top: 12px;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
 }
 
 .logo-icon {
-    width: 52px;         /* Оптимальный мобильный размер как на скрине */
-    height: 52px;
+    width: 64px;             
+    height: 64px;
     object-fit: contain;
+    display: block;
 }
 
 .logo-text {
     font-family: 'Syne', sans-serif;
     font-weight: 700;
-    font-size: 36px;     /* Размер шрифта LEKKO */
-    letter-spacing: 1px;
-    color: #ffffff;
-    line-height: 1;      /* Предотвращает смещение текста вниз */
+    font-size: 44px;        
+    letter-spacing: 2px;    
+    color: #ffffff;          
+    line-height: 1;          
 }
 
 .user-greeting {
-    font-size: 15px;
+    font-size: 15px;        
     color: var(--muted);
-    margin-top: 8px;
+    margin-top: 4px;
     margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 .user-greeting b { color: var(--white); }
 

@@ -8,7 +8,7 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, MenuButtonWebApp
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 TOKEN = os.environ.get("BOT_TOKEN", "8492885588:AAFPmxL_u4elT0Z5qHVuP0-FicEjPpkp-Xc")
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -18,6 +18,11 @@ ADMIN_ID = 7526702987
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 db_pool = None
+
+TZ_OFFSET = timedelta(hours=5) 
+
+def now_local():
+    return datetime.now(timezone.utc) + TZ_OFFSET
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -92,10 +97,8 @@ async def init_db():
         await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS latitude FLOAT")
         await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS longitude FLOAT")
         await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS map_link TEXT")
-        
-        # Добавляем колонку для ID программы, если её нет (Задачи 1, 2)
         await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS software_id TEXT")
-        
+
     print("✅ База данных готова")
 
 
@@ -112,7 +115,6 @@ async def start(message: Message):
             message.from_user.username,
             message.from_user.first_name)
 
-    # Принудительная установка постоянной кнопки WebApp в интерфейсе меню Telegram (Задача 6)
     try:
         await bot.set_chat_menu_button(
             chat_id=message.chat.id,
@@ -146,7 +148,7 @@ async def cmd_stats(message: Message):
         await message.answer("❌ У вас нет доступа к этой команде.")
         return
 
-    today = datetime.now().date()
+    today = now_local().date()
 
     async with db_pool.acquire() as conn:
         active = await conn.fetch("""
@@ -162,10 +164,10 @@ async def cmd_stats(message: Message):
 
         pharmacies = await conn.fetch("""
             SELECT first_name, name, status FROM pharmacies
-            WHERE DATE(created_at) = $1
+            WHERE (created_at + INTERVAL '5 hours')::DATE = $1
         """, today)
 
-    text = f"📊 *Сводка за сегодня* ({datetime.now().strftime('%d.%m.%Y')})\n\n"
+    text = f"📊 *Сводка за сегодня* ({now_local().strftime('%d.%m.%Y')}, Ташкент)\n\n"
 
     if active:
         text += f"🟢 *Сейчас на смене ({len(active)}):*\n"
@@ -197,8 +199,9 @@ async def cmd_stats(message: Message):
 
     await message.answer(text, parse_mode="Markdown")
 
+
 # =========================
-# /report — отчёт за неделю
+# /report — отчёт за текущую неделю (пн–вс)
 # =========================
 
 @dp.message(Command("report"))
@@ -206,17 +209,97 @@ async def cmd_report(message: Message):
     if message.from_user.id != ADMIN_ID:
         await message.answer("❌ У вас нет доступа к этой команде.")
         return
-
     await send_weekly_report()
 
 
 # =========================
-# АВТООТЧЁТ — пятница 18:30
+# /reportall — отчёт за всё время
+# =========================
+
+@dp.message(Command("reportall"))
+async def cmd_reportall(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас нет доступа к этой команде.")
+        return
+    await send_all_time_report()
+
+
+# =========================
+# ОТЧЁТ ЗА ВСЁ ВРЕМЯ
+# =========================
+
+async def send_all_time_report():
+    async with db_pool.acquire() as conn:
+        staff = await conn.fetch("""
+            SELECT
+                first_name,
+                COUNT(*) as shifts_count,
+                COUNT(CASE WHEN end_time IS NOT NULL THEN 1 END) as completed,
+                SUM(CASE WHEN distance_km IS NOT NULL THEN distance_km ELSE 0 END) as total_distance
+            FROM shifts
+            GROUP BY first_name
+            ORDER BY shifts_count DESC
+        """)
+
+        pharma = await conn.fetch("""
+            SELECT first_name, COUNT(*) as total,
+                   COUNT(CASE WHEN status='deal' THEN 1 END) as deals,
+                   COUNT(CASE WHEN status='decline' THEN 1 END) as declines,
+                   COUNT(CASE WHEN status='inwork' THEN 1 END) as inwork,
+                   COUNT(CASE WHEN status='cold' THEN 1 END) as cold
+            FROM pharmacies
+            GROUP BY first_name
+            ORDER BY total DESC
+        """)
+
+        pharma_dict = {p['first_name']: p for p in pharma}
+
+    text = "📊 *Отчёт за всё время*\n\n"
+
+    if not staff:
+        text += "Нет данных."
+        await bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="Markdown")
+        return
+
+    for i, s in enumerate(staff, 1):
+        name = s['first_name']
+        dist = f" | 📍 {round(s['total_distance'], 1)} км" if s['total_distance'] else ""
+        text += f"{i}. *{name}*\n"
+        text += f"  🕒 Смен: {s['shifts_count']} (завершено: {s['completed']}{dist})\n"
+        p = pharma_dict.get(name)
+        if p:
+            text += (
+                f"  🏥 Аптек: {p['total']} "
+                f"(✅{p['deals']} ❌{p['declines']} 🔄{p['inwork']} ❄️{p['cold']})\n"
+            )
+        else:
+            text += f"  🏥 Аптек: 0\n"
+        text += "\n"
+
+    total_shifts = sum(s['shifts_count'] for s in staff)
+    total_pharma = sum(p['total'] for p in pharma)
+    total_deals = sum(p['deals'] for p in pharma)
+
+    text += (
+        f"📊 *Итого за всё время:*\n"
+        f"  Смен: {total_shifts}\n"
+        f"  Аптек: {total_pharma}\n"
+        f"  Сделок: {total_deals}\n"
+    )
+
+    await bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="Markdown")
+    print("✅ Отчёт за всё время отправлен")
+
+
+# =========================
+# ЕЖЕНЕДЕЛЬНЫЙ ОТЧЁТ (текущая неделя пн–вс)
 # =========================
 
 async def send_weekly_report():
-    week_ago = (datetime.now() - timedelta(days=7)).date()
-    today = datetime.now().date()
+    local_now = now_local()
+    # Начало текущей недели (понедельник)
+    week_start = (local_now - timedelta(days=local_now.weekday())).date()
+    week_end = local_now.date()
 
     async with db_pool.acquire() as conn:
         staff = await conn.fetch("""
@@ -229,7 +312,7 @@ async def send_weekly_report():
             WHERE date >= $1::TEXT AND date <= $2::TEXT
             GROUP BY first_name
             ORDER BY shifts_count DESC
-        """, str(week_ago), str(today))
+        """, str(week_start), str(week_end))
 
         pharma = await conn.fetch("""
             SELECT first_name, COUNT(*) as total,
@@ -238,17 +321,17 @@ async def send_weekly_report():
                    COUNT(CASE WHEN status='inwork' THEN 1 END) as inwork,
                    COUNT(CASE WHEN status='cold' THEN 1 END) as cold
             FROM pharmacies
-            WHERE DATE(created_at) >= $1 AND DATE(created_at) <= $2
+            WHERE (created_at + INTERVAL '5 hours')::DATE >= $1
+              AND (created_at + INTERVAL '5 hours')::DATE <= $2
             GROUP BY first_name
             ORDER BY total DESC
-        """, week_ago, today)
+        """, week_start, week_end)
 
         pharma_dict = {p['first_name']: p for p in pharma}
 
     text = (
         f"📈 *Еженедельный отчёт*\n"
-        f"({(datetime.now() - timedelta(days=7)).strftime('%d.%m')} — "
-        f"{datetime.now().strftime('%d.%m.%Y')})\n\n"
+        f"({week_start.strftime('%d.%m')} — {week_end.strftime('%d.%m.%Y')}, Ташкент)\n\n"
     )
 
     if not staff:
@@ -286,16 +369,19 @@ async def send_weekly_report():
     print("✅ Еженедельный отчёт отправлен")
 
 
+# =========================
+# ПЛАНИРОВЩИК — пятница 18:30 по Ташкенту
+# =========================
+
 async def scheduler():
     while True:
-        now = datetime.now()
-        # Пятница (weekday=4), 18:30
-        if now.weekday() == 4 and now.hour == 18 and now.minute == 30:
+        local_now = now_local()
+        if local_now.weekday() == 4 and local_now.hour == 18 and local_now.minute == 30:
             try:
                 await send_weekly_report()
             except Exception as e:
                 print(f"Ошибка автоотчёта: {e}")
-            await asyncio.sleep(60)
+            await asyncio.sleep(60) 
         await asyncio.sleep(30)
 
 
@@ -336,10 +422,10 @@ async def handle_event(request):
         map_link = data.get("map")
 
         # -------------------------
-        # НАЧАЛО СМЕНЫ (Задача 7: Только ОДНО сообщение со встроенной ссылкой)
+        # НАЧАЛО СМЕНЫ
         # -------------------------
         if event_type == "shift_start":
-            today_str = datetime.now().date().strftime("%Y-%m-%d")
+            today_str = now_local().date().strftime("%Y-%m-%d")
             async with db_pool.acquire() as conn:
                 await conn.execute("""
                     INSERT INTO shifts (user_id, first_name, start_time, latitude, longitude, map_link, date)
@@ -358,10 +444,10 @@ async def handle_event(request):
                 await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown", disable_web_page_preview=True)
 
         # -------------------------
-        # ЗАВЕРШЕНИЕ СМЕНЫ (Задача 7: Только ОДНО сообщение со встроенной ссылкой)
+        # ЗАВЕРШЕНИЕ СМЕНЫ
         # -------------------------
         elif event_type == "shift_end":
-            today_str = datetime.now().date().strftime("%Y-%m-%d")
+            today_str = now_local().date().strftime("%Y-%m-%d")
             distance = 0.0
 
             async with db_pool.acquire() as conn:
@@ -399,11 +485,11 @@ async def handle_event(request):
                 await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown", disable_web_page_preview=True)
 
         # -------------------------
-        # ДОБАВЛЕНИЕ АПТЕКИ (Задачи 1, 2: Поддержка software_id)
+        # ДОБАВЛЕНИЕ АПТЕКИ
         # -------------------------
         elif event_type == "pharmacy_add":
             sw_name = data.get("software")
-            sw_id = data.get("softwareId") # Берем ID программы
+            sw_id = data.get("softwareId")
 
             async with db_pool.acquire() as conn:
                 await conn.execute("""
@@ -418,7 +504,6 @@ async def handle_event(request):
                 addr = await get_address(lat, lon)
                 address_text = f"\n📍 Адрес: {addr}\n🗺 [Google Maps]({map_link})"
 
-            # Если есть ID программы, красиво выводим его в скобках
             sw_display = f"{sw_name} (🆔 ID: {sw_id})" if sw_id else sw_name
 
             text = (
@@ -454,11 +539,11 @@ async def main():
     app_web = web.Application()
     app_web.router.add_post("/event", handle_event)
     app_web.router.add_route("OPTIONS", "/event", handle_event)
-    
+
     runner = web.AppRunner(app_web)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8080)))
-    
+
     asyncio.create_task(site.start())
     asyncio.create_task(scheduler())
     print("🚀 Веб-сервер запущен")
