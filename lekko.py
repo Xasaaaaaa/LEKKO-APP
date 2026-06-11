@@ -369,18 +369,28 @@ async def notify_admin(text, lat=None, lon=None):
 
 
 # =========================
-# WEB SERVER & HANDLERS
+# MIDDLEWARE ДЛЯ CORS (ГЛОБАЛЬНЫЙ)
+# =========================
+
+@web.middleware
+async def cors_middleware(request, handler):
+    # Если это предварительный запрос OPTIONS, сразу отвечаем 200 OK со всеми CORS заголовками
+    if request.method == "OPTIONS":
+        response = web.Response(status=200)
+    else:
+        response = await handler(request)
+
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Admin-Token"
+    return response
+
+
+# =========================
+# WEB SERVER HANDLERS
 # =========================
 
 async def handle_event(request):
-    headers = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type"
-    }
-    if request.method == "OPTIONS":
-        return web.Response(status=200, headers=headers)
-
     try:
         data = await request.json()
         event_type = data.get("event")
@@ -389,7 +399,7 @@ async def handle_event(request):
         first_name = user_data.get("first_name") or "Сотрудник"
 
         if not user_id:
-            return web.json_response({"ok": False, "error": "No chat_id found"}, headers=headers)
+            return web.json_response({"ok": False, "error": "No chat_id found"})
 
         lat = data.get("latitude")
         lon = data.get("longitude")
@@ -508,18 +518,15 @@ async def handle_event(request):
 
     except Exception as e:
         print(f"❌ Ошибка обработки события: {e}")
-        return web.Response(status=500, text=str(e), headers=headers)
+        return web.Response(status=500, text=str(e))
 
-    return web.json_response({"ok": True}, headers=headers)
+    return web.json_response({"ok": True})
 
 
 async def handle_data(request):
-    h = cors_headers()
-    if request.method == "OPTIONS":
-        return web.Response(status=200, headers=h)
     user_id = request.query.get("user_id")
     if not user_id:
-        return web.json_response({"ok": False, "error": "No user_id"}, headers=h)
+        return web.json_response({"ok": False, "error": "No user_id"})
     try:
         async with db_pool.acquire() as conn:
             pharmacies = await conn.fetch("""
@@ -571,18 +578,15 @@ async def handle_data(request):
                 "startMap": active_shift['map_link']
             } if active_shift else None,
             "dayFact": pharma_today if pharma_today else 0
-        }, headers=h)
+        })
     except Exception as e:
         print(f"❌ Ошибка handle_data: {e}")
-        return web.json_response({"ok": False, "error": str(e)}, headers=h)
+        return web.json_response({"ok": False, "error": str(e)})
 
 
 async def handle_admin_users(request):
-    h = cors_headers()
-    if request.method == "OPTIONS":
-        return web.Response(status=200, headers=h)
     if not check_token(request):
-        return web.json_response({"ok": False, "error": "Unauthorized"}, status=401, headers=h)
+        return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
     async with db_pool.acquire() as conn:
         users = await conn.fetch("""
             SELECT u.id, 
@@ -611,15 +615,12 @@ async def handle_admin_users(request):
         "deals": r['deals'],
         "last_shift": r['last_shift'].strftime("%d.%m.%Y %H:%M") if r['last_shift'] else "—"
     } for r in users]
-    return web.json_response({"ok": True, "users": result}, headers=h)
+    return web.json_response({"ok": True, "users": result})
 
 
 async def handle_admin_pharmacies(request):
-    h = cors_headers()
-    if request.method == "OPTIONS":
-        return web.Response(status=200, headers=h)
     if not check_token(request):
-        return web.json_response({"ok": False, "error": "Unauthorized"}, status=401, headers=h)
+        return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
     user_id = request.query.get("user_id")
     async with db_pool.acquire() as conn:
         if user_id:
@@ -652,15 +653,12 @@ async def handle_admin_pharmacies(request):
         "date": r['local_time'].strftime("%d.%m.%Y") if r['local_time'] else "—",
         "time": r['local_time'].strftime("%H:%M") if r['local_time'] else "—"
     } for r in rows]
-    return web.json_response({"ok": True, "pharmacies": result}, headers=h)
+    return web.json_response({"ok": True, "pharmacies": result})
 
 
 async def handle_admin_shifts(request):
-    h = cors_headers()
-    if request.method == "OPTIONS":
-        return web.Response(status=200, headers=h)
     if not check_token(request):
-        return web.json_response({"ok": False, "error": "Unauthorized"}, status=401, headers=h)
+        return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
     user_id = request.query.get("user_id")
     async with db_pool.acquire() as conn:
         if user_id:
@@ -687,15 +685,12 @@ async def handle_admin_shifts(request):
         "distance_km": r['distance_km'] or 0.0,
         "map_link": r['map_link'] or ""
     } for r in rows]
-    return web.json_response({"ok": True, "shifts": result}, headers=h)
+    return web.json_response({"ok": True, "shifts": result})
 
 
 async def handle_admin_stats(request):
-    h = cors_headers()
-    if request.method == "OPTIONS":
-        return web.Response(status=200, headers=h)
     if not check_token(request):
-        return web.json_response({"ok": False, "error": "Unauthorized"}, status=401, headers=h)
+        return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
     today = now_local().date()
     week_start = (now_local() - timedelta(days=now_local().weekday())).date()
     async with db_pool.acquire() as conn:
@@ -722,7 +717,7 @@ async def handle_admin_stats(request):
         "week_pharmas": week_pharmas,
         "total_pharmas": total_pharmas,
         "total_users": total_users
-    }}, headers=h)
+    }})
 
 
 @dp.message(Command("users"))
@@ -791,13 +786,6 @@ async def cmd_pharmacy(message: Message):
     await message.answer(text, parse_mode="Markdown", disable_web_page_preview=True)
 
 
-def cors_headers():
-    return {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, X-Admin-Token"
-    }
-
 def check_token(request):
     token = request.headers.get("X-Admin-Token") or request.query.get("token")
     return token == ADMIN_TOKEN
@@ -806,19 +794,16 @@ def check_token(request):
 async def main():
     await init_db()
 
-    app_web = web.Application()
+    # Подключаем глобальный CORS Middleware при инициализации приложения
+    app_web = web.Application(middlewares=[cors_middleware])
+    
+    # Теперь регистрируем ТОЛЬКО основные роуты (OPTIONS запросы обработает middleware)
     app_web.router.add_post("/event", handle_event)
-    app_web.router.add_route("OPTIONS", "/event", handle_event)
     app_web.router.add_get("/data", handle_data)
-    app_web.router.add_route("OPTIONS", "/data", handle_data)
     app_web.router.add_get("/admin/users", handle_admin_users)
-    app_web.router.add_route("OPTIONS", "/admin/users", handle_admin_users)
     app_web.router.add_get("/admin/pharmacies", handle_admin_pharmacies)
-    app_web.router.add_route("OPTIONS", "/admin/pharmacies", handle_admin_pharmacies)
     app_web.router.add_get("/admin/shifts", handle_admin_shifts)
-    app_web.router.add_route("OPTIONS", "/admin/shifts", handle_admin_shifts)
     app_web.router.add_get("/admin/stats", handle_admin_stats)
-    app_web.router.add_route("OPTIONS", "/admin/stats", handle_admin_stats)
 
     runner = web.AppRunner(app_web)
     await runner.setup()
