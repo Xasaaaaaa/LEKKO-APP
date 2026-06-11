@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LEKKO — Админ панель</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght=700;800&family=DM+Sans:wght=300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
     --bg:     #080f1a;
@@ -203,7 +203,7 @@ if (!token) {
     document.getElementById("authOverlay").style.display = "flex";
 }
 
-// Время
+// Живые часы Узбекистана
 setInterval(() => {
     const options = { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit", second: "2-digit" };
     document.getElementById("liveClock").textContent = "Ташкент: " + new Date().toLocaleTimeString("ru-RU", options);
@@ -231,7 +231,7 @@ async function loadUsers() {
         const res = await fetch(`${SERVER}/admin/users?token=${token}`);
         const data = await res.json();
         if(data.ok) {
-            allUsers = data.users;
+            allUsers = data.users || [];
             renderUsers();
         }
     } catch(e) { console.error("Ошибка пользователей", e); }
@@ -242,7 +242,7 @@ async function loadShifts() {
         const res = await fetch(`${SERVER}/admin/shifts?token=${token}`);
         const data = await res.json();
         if(data.ok) {
-            allShifts = data.shifts;
+            allShifts = data.shifts || [];
             renderShifts(allShifts);
         }
     } catch(e) { console.error("Ошибка смен", e); }
@@ -253,7 +253,7 @@ async function loadPharmacies() {
         const res = await fetch(`${SERVER}/admin/pharmacies?token=${token}`);
         const data = await res.json();
         if(data.ok) {
-            allPharmacies = data.pharmacies;
+            allPharmacies = data.pharmacies || [];
             renderPharmacies(allPharmacies);
         }
     } catch(e) { console.error("Ошибка аптек", e); }
@@ -263,12 +263,12 @@ function renderUsers() {
     const tbody = document.getElementById("usersTable");
     tbody.innerHTML = allUsers.map(u => `
         <tr>
-            <td><b style="color:var(--white); font-size:15px;">${u.first_name}</b><br><span style="color:var(--muted); font-size:11px;">ID: ${u.id}</span></td>
+            <td><b style="color:var(--white); font-size:15px;">${u.first_name || 'Неизвестный'}</b><br><span style="color:var(--muted); font-size:11px;">ID: ${u.id}</span></td>
             <td style="color:var(--teal);">${u.username ? '@'+u.username : '—'}</td>
-            <td>${u.shifts_total} <span style="color:var(--muted); font-size:12px;">(завершено: ${u.shifts_done})</span></td>
-            <td style="font-weight:600; color:var(--white);">${u.pharmas_total}</td>
-            <td style="color:var(--green); font-weight:600;">${u.deals}</td>
-            <td style="color:var(--muted); font-size:13px;">${u.last_shift}</td>
+            <td>${u.shifts_total || 0} <span style="color:var(--muted); font-size:12px;">(завершено: ${u.shifts_done || 0})</span></td>
+            <td style="font-weight:600; color:var(--white);">${u.pharmas_total || 0}</td>
+            <td style="color:var(--green); font-weight:600;">${u.deals || 0}</td>
+            <td style="color:var(--muted); font-size:13px;">${u.last_shift || '—'}</td>
         </tr>
     `).join("") || '<tr><td colspan="6" style="color:var(--muted); text-align:center;">Нет сотрудников в базе</td></tr>';
 }
@@ -276,12 +276,22 @@ function renderUsers() {
 function renderShifts(arr) {
     const tbody = document.getElementById("shiftsTable");
     tbody.innerHTML = arr.map(s => {
-        // Конвертируем YYYY-MM-DD в человеческий DD.MM.YYYY для отображения в таблице
-        const displayDate = s.date ? s.date.split('-').reverse().join('.') : '—';
+        let displayDate = '—';
+        
+        // Абсолютно безопасное приведение и чтение даты
+        if (s.date) {
+            const dateStr = String(s.date);
+            if (dateStr.includes('-')) {
+                displayDate = dateStr.split('-').reverse().join('.');
+            } else {
+                displayDate = dateStr;
+            }
+        }
+
         return `
             <tr>
                 <td style="color:var(--muted); font-weight:500;">${displayDate}</td>
-                <td><b>${s.first_name}</b></td>
+                <td><b>${s.first_name || '—'}</b></td>
                 <td>${s.start_time || '—'}</td>
                 <td>${s.end_time || '<span class="badge" style="background:rgba(46,221,142,0.12); color:var(--green);">● Активна</span>'}</td>
                 <td style="color:var(--teal); font-weight:500;">${s.worked || '—'}</td>
@@ -298,28 +308,31 @@ function renderPharmacies(arr) {
     
     tbody.innerHTML = arr.map(p => `
         <tr>
-            <td><span style="color:var(--white); font-weight:500;">${p.date}</span><br><span style="color:var(--muted); font-size:12px;">⏱ ${p.time}</span></td>
-            <td><b>${p.first_name}</b></td>
-            <td><span style="font-size:15px; font-weight:600; color:var(--white);">${p.name}</span></td>
-            <td>${p.lpr_name || '—'}<br><span style="color:var(--muted); font-size:13px;">${p.lpr_phone}</span></td>
-            <td><b>${p.software}</b>${p.software_id ? `<br><span style="color:var(--warn); font-size:12px; font-family:monospace;">ID: ${p.software_id}</span>` : ''}</td>
-            <td><span class="badge ${p.status}">${statuses[p.status] || p.status}</span></td>
+            <td><span style="color:var(--white); font-weight:500;">${p.date || '—'}</span><br><span style="color:var(--muted); font-size:12px;">⏱ ${p.time || '—'}</span></td>
+            <td><b>${p.first_name || '—'}</b></td>
+            <td><span style="font-size:15px; font-weight:600; color:var(--white);">${p.name || '—'}</span></td>
+            <td>${p.lpr_name || '—'}<br><span style="color:var(--muted); font-size:13px;">${p.lpr_phone || '—'}</span></td>
+            <td><b>${p.software || '—'}</b>${p.software_id ? `<br><span style="color:var(--warn); font-size:12px; font-family:monospace;">ID: ${p.software_id}</span>` : ''}</td>
+            <td><span class="badge ${p.status || 'cold'}">${statuses[p.status] || p.status || '—'}</span></td>
             <td style="font-style:italic; color:var(--muted); max-width:250px; white-space:normal; word-break:break-word;">${p.comment ? '«'+p.comment+'»' : '—'}</td>
             <td>${p.map_link ? `<a href="${p.map_link}" target="_blank" style="color:var(--teal); text-decoration:none; font-size:16px;">📍 Карта</a>` : '—'}</td>
         </tr>
     `).join("") || '<tr><td colspan="8" style="color:var(--muted); text-align:center; padding:20px;">Нет данных по заданным фильтрам</td></tr>';
 }
 
-// Специфические фильтры
 function filterShifts() {
     const q = document.getElementById("shiftSearch").value.toLowerCase();
-    const dateInput = document.getElementById("shiftDate").value; // Дает нам формат YYYY-MM-DD
+    const dateInput = document.getElementById("shiftDate").value; // YYYY-MM-DD
     
     let filtered = allShifts;
-    if (q) filtered = filtered.filter(s => s.first_name.toLowerCase().includes(q));
+    if (q) filtered = filtered.filter(s => s.first_name && s.first_name.toLowerCase().includes(q));
     if (dateInput) {
-        // Бэкенд возвращает смены в формате YYYY-MM-DD, поэтому сравниваем строки напрямую
-        filtered = filtered.filter(s => s.date === dateInput);
+        filtered = filtered.filter(s => {
+            if (!s.date) return false;
+            const sDateStr = String(s.date);
+            const reversedInput = dateInput.split('-').reverse().join('.');
+            return sDateStr === dateInput || sDateStr === reversedInput;
+        });
     }
     renderShifts(filtered);
 }
@@ -332,17 +345,24 @@ function clearShiftFilters() {
 
 function filterPharmacies() {
     const q = document.getElementById("pharmSearch").value.toLowerCase();
-    const dateInput = document.getElementById("pharmDate").value; // Возвращает YYYY-MM-DD
+    const dateInput = document.getElementById("pharmDate").value; // YYYY-MM-DD
     const status = document.getElementById("pharmStatus").value;
     
     let filtered = allPharmacies;
-    if (q) filtered = filtered.filter(p => p.name.toLowerCase().includes(q) || p.first_name.toLowerCase().includes(q));
+    if (q) {
+        filtered = filtered.filter(p => 
+            (p.name && p.name.toLowerCase().includes(q)) || 
+            (p.first_name && p.first_name.toLowerCase().includes(q))
+        );
+    }
     if (status) filtered = filtered.filter(p => p.status === status);
     if (dateInput) {
-        // Так как в handle_admin_pharmacies приходит локальная дата в формате DD.MM.YYYY, 
-        // развернем значение из инпута YYYY-MM-DD -> DD.MM.YYYY для сопоставления
         const formattedDate = dateInput.split('-').reverse().join('.');
-        filtered = filtered.filter(p => p.date === formattedDate);
+        filtered = filtered.filter(p => {
+            if (!p.date) return false;
+            const pDateStr = String(p.date);
+            return pDateStr === formattedDate || pDateStr === dateInput;
+        });
     }
     renderPharmacies(filtered);
 }
@@ -365,14 +385,13 @@ function showPage(name) {
     document.getElementById("pageTitle").textContent = titles[name];
 }
 
-// Инициализация при наличии токена
+// Инициализация
 if(token) {
     loadStats();
     loadUsers();
     loadShifts();
     loadPharmacies();
     
-    // Автообновление каждые 30 секунд
     setInterval(() => {
         loadStats();
         loadUsers();
