@@ -374,7 +374,6 @@ async def notify_admin(text, lat=None, lon=None):
 
 @web.middleware
 async def cors_middleware(request, handler):
-    # Если это предварительный запрос OPTIONS, сразу отвечаем 200 OK со всеми CORS заголовками
     if request.method == "OPTIONS":
         response = web.Response(status=200)
     else:
@@ -794,10 +793,8 @@ def check_token(request):
 async def main():
     await init_db()
 
-    # Подключаем глобальный CORS Middleware при инициализации приложения
     app_web = web.Application(middlewares=[cors_middleware])
     
-    # Теперь регистрируем ТОЛЬКО основные роуты (OPTIONS запросы обработает middleware)
     app_web.router.add_post("/event", handle_event)
     app_web.router.add_get("/data", handle_data)
     app_web.router.add_get("/admin/users", handle_admin_users)
