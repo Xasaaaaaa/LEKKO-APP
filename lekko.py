@@ -455,14 +455,16 @@ async def handle_event(request):
         elif event_type == "pharmacy_add":
             sw_name = data.get("software")
             sw_id = data.get("softwareId")
+            p_lat = float(lat) if lat else None
+            p_lon = float(lon) if lon else None
+            p_photos = int(data.get("photosCount", 0))
 
             async with db_pool.acquire() as conn:
                 await conn.execute("""
                     INSERT INTO pharmacies (user_id, first_name, name, lpr_name, lpr_phone, software, software_id, status, comment, photos_count, latitude, longitude, map_link)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 """, int(user_id), first_name, data.get("name"), data.get("lprName"), data.get("lprPhone"),
-                    sw_name, sw_id, data.get("status"), data.get("comment"), int(data.get("photosCount", 0)),
-                    float(lat) if lat else None, float(lon) if lon else None, map_link)
+                    sw_name, sw_id, data.get("status"), data.get("comment"), p_photos, p_lat, p_lon, map_link)
 
             address_text = ""
             if lat and lon:
@@ -480,13 +482,13 @@ async def handle_event(request):
                 f"💻 Программа: {sw_display}\n"
                 f"📊 Статус: {data.get('status') or '—'}\n"
                 f"💬 Комментарий: {data.get('comment') or '—'}\n"
-                f"📸 Фото: {data.get('photosCount')} шт."
+                f"📸 Фото: {p_photos} шт."
                 f"{address_text}"
             )
 
             await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown")
             if lat and lon:
-                await bot.send_location(chat_id=int(user_id), latitude=float(lat), longitude=float(lon))
+                await bot.send_location(chat_id=int(user_id), latitude=p_lat, longitude=p_lon)
 
             if int(user_id) != ADMIN_ID:
                 await notify_admin(text, lat, lon)
@@ -522,7 +524,6 @@ async def handle_data(request):
                 WHERE user_id=$1 AND end_time IS NULL ORDER BY id DESC LIMIT 1
             """, int(user_id))
             today = now_local().date()
-            # Добавлено строгое приведение ::DATE для исключения InvalidTextRepresentationError
             pharma_today = await conn.fetchval("""
                 SELECT COUNT(*) FROM pharmacies
                 WHERE user_id=$1 AND (created_at + INTERVAL '5 hours')::DATE = $2::DATE
