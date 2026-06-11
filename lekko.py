@@ -94,14 +94,13 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
-        # Гарантированное добавление новых колонок сразу после создания таблиц
         await conn.execute("ALTER TABLE shifts ADD COLUMN IF NOT EXISTS distance_km FLOAT")
         await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS latitude FLOAT")
         await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS longitude FLOAT")
         await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS map_link TEXT")
         await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS software_id TEXT")
 
-    print("✅ База данных успешно инициализирована и обновлена")
+    print("✅ База данных успешно инициализирована")
 
 
 @dp.message(CommandStart())
@@ -162,7 +161,7 @@ async def cmd_stats(message: Message):
 
         pharmacies = await conn.fetch("""
             SELECT COALESCE(first_name, 'Неизвестный') as first_name, name, status FROM pharmacies
-            WHERE (created_at + INTERVAL '5 hours')::DATE = $1
+            WHERE (created_at + INTERVAL '5 hours')::DATE = $1::DATE
         """, today)
 
     text = f"📊 *Сводка за сегодня* ({now_local().strftime('%d.%m.%Y')}, Ташкент)\n\n"
@@ -301,8 +300,8 @@ async def send_weekly_report():
                    COUNT(CASE WHEN status='inwork' THEN 1 END) as inwork,
                    COUNT(CASE WHEN status='cold' THEN 1 END) as cold
             FROM pharmacies
-            WHERE (created_at + INTERVAL '5 hours')::DATE >= $1
-              AND (created_at + INTERVAL '5 hours')::DATE <= $2
+            WHERE (created_at + INTERVAL '5 hours')::DATE >= $1::DATE
+              AND (created_at + INTERVAL '5 hours')::DATE <= $2::DATE
             GROUP BY first_name
             ORDER BY total DESC
         """, week_start, week_end)
@@ -523,9 +522,10 @@ async def handle_data(request):
                 WHERE user_id=$1 AND end_time IS NULL ORDER BY id DESC LIMIT 1
             """, int(user_id))
             today = now_local().date()
+            # Добавлено строгое приведение ::DATE для исключения InvalidTextRepresentationError
             pharma_today = await conn.fetchval("""
                 SELECT COUNT(*) FROM pharmacies
-                WHERE user_id=$1 AND (created_at + INTERVAL '5 hours')::DATE=$2
+                WHERE user_id=$1 AND (created_at + INTERVAL '5 hours')::DATE = $2::DATE
             """, int(user_id), today)
 
         def fmt_p(p):
@@ -556,7 +556,7 @@ async def handle_data(request):
                 "startTimestamp": int(active_shift['created_at'].timestamp() * 1000),
                 "startMap": active_shift['map_link']
             } if active_shift else None,
-            "dayFact": pharma_today
+            "dayFact": pharma_today if pharma_today else 0
         }, headers=h)
     except Exception as e:
         print(f"❌ Ошибка handle_data: {e}")
@@ -687,7 +687,7 @@ async def handle_admin_stats(request):
     async with db_pool.acquire() as conn:
         today_pharmas = await conn.fetchval("""
             SELECT COUNT(*) FROM pharmacies
-            WHERE (created_at + INTERVAL '5 hours')::DATE = $1
+            WHERE (created_at + INTERVAL '5 hours')::DATE = $1::DATE
         """, today) or 0
         today_shifts = await conn.fetchval("""
             SELECT COUNT(*) FROM shifts WHERE date=$1::TEXT AND end_time IS NOT NULL
@@ -697,7 +697,7 @@ async def handle_admin_stats(request):
         """) or 0
         week_pharmas = await conn.fetchval("""
             SELECT COUNT(*) FROM pharmacies
-            WHERE (created_at + INTERVAL '5 hours')::DATE >= $1
+            WHERE (created_at + INTERVAL '5 hours')::DATE >= $1::DATE
         """, week_start) or 0
         total_pharmas = await conn.fetchval("SELECT COUNT(*) FROM pharmacies") or 0
         total_users = await conn.fetchval("SELECT COUNT(*) FROM users") or 0
