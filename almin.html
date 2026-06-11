@@ -161,7 +161,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
 
     <div id="page_pharmacies" class="page">
         <div class="filter-bar">
-            <input type="text" id="pharmSearch" class="input-control" placeholder="Поиск по названию или агенту..." oninput="filterPharmacies()">
+            <input type="text" id="pharmSearch" class="input-control" placeholder="Поиск по названием или агенту..." oninput="filterPharmacies()">
             <input type="date" id="pharmDate" class="input-control" onchange="filterPharmacies()">
             <select id="pharmStatus" class="input-control" onchange="filterPharmacies()">
                 <option value="">Все статусы</option>
@@ -205,8 +205,11 @@ if (!token) {
 
 // Живые часы Узбекистана
 setInterval(() => {
-    const options = { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit", second: "2-digit" };
-    document.getElementById("liveClock").textContent = "Ташкент: " + new Date().toLocaleTimeString("ru-RU", options);
+    const el = document.getElementById("liveClock");
+    if (el) {
+        const options = { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit", second: "2-digit" };
+        el.textContent = "Ташкент: " + new Date().toLocaleTimeString("ru-RU", options);
+    }
 }, 1000);
 
 let allUsers = [];
@@ -217,11 +220,17 @@ async function loadStats() {
     try {
         const res = await fetch(`${SERVER}/admin/stats?token=${token}`);
         const data = await res.json();
-        if(data.ok) {
-            document.getElementById("st_total_pharmas").textContent = data.stats.total_pharmas;
-            document.getElementById("st_today_pharmas").textContent = data.stats.today_pharmas;
-            document.getElementById("st_active_shifts").textContent = data.stats.active_shifts;
-            document.getElementById("st_total_users").textContent = data.stats.total_users;
+        if(data.ok && data.stats) {
+            // Безопасное обновление с проверкой наличия ID в разметке
+            const tPharmas = document.getElementById("st_total_pharmas");
+            const tToday = document.getElementById("st_today_pharmas");
+            const aShifts = document.getElementById("st_active_shifts");
+            const tUsers = document.getElementById("st_total_users");
+
+            if (tPharmas) tPharmas.textContent = data.stats.total_pharmas ?? 0;
+            if (tToday) tToday.textContent = data.stats.today_pharmas ?? 0;
+            if (aShifts) aShifts.textContent = data.stats.active_shifts ?? 0;
+            if (tUsers) tUsers.textContent = data.stats.total_users ?? 0;
         }
     } catch(e) { console.error("Ошибка статистики", e); }
 }
@@ -261,6 +270,7 @@ async function loadPharmacies() {
 
 function renderUsers() {
     const tbody = document.getElementById("usersTable");
+    if (!tbody) return;
     tbody.innerHTML = allUsers.map(u => `
         <tr>
             <td><b style="color:var(--white); font-size:15px;">${u.first_name || 'Неизвестный'}</b><br><span style="color:var(--muted); font-size:11px;">ID: ${u.id}</span></td>
@@ -275,10 +285,9 @@ function renderUsers() {
 
 function renderShifts(arr) {
     const tbody = document.getElementById("shiftsTable");
+    if (!tbody) return;
     tbody.innerHTML = arr.map(s => {
         let displayDate = '—';
-        
-        // Абсолютно безопасное приведение и чтение даты
         if (s.date) {
             const dateStr = String(s.date);
             if (dateStr.includes('-')) {
@@ -304,6 +313,7 @@ function renderShifts(arr) {
 
 function renderPharmacies(arr) {
     const tbody = document.getElementById("pharmaciesTable");
+    if (!tbody) return;
     const statuses = { cold: 'Холодный', inwork: 'В работе', deal: 'Договорились', decline: 'Отказ' };
     
     tbody.innerHTML = arr.map(p => `
@@ -322,7 +332,7 @@ function renderPharmacies(arr) {
 
 function filterShifts() {
     const q = document.getElementById("shiftSearch").value.toLowerCase();
-    const dateInput = document.getElementById("shiftDate").value; // YYYY-MM-DD
+    const dateInput = document.getElementById("shiftDate").value;
     
     let filtered = allShifts;
     if (q) filtered = filtered.filter(s => s.first_name && s.first_name.toLowerCase().includes(q));
@@ -345,7 +355,7 @@ function clearShiftFilters() {
 
 function filterPharmacies() {
     const q = document.getElementById("pharmSearch").value.toLowerCase();
-    const dateInput = document.getElementById("pharmDate").value; // YYYY-MM-DD
+    const dateInput = document.getElementById("pharmDate").value;
     const status = document.getElementById("pharmStatus").value;
     
     let filtered = allPharmacies;
@@ -378,20 +388,26 @@ function showPage(name) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     
-    document.getElementById(`page_${name}`).classList.add('active');
-    event.target.classList.add('active');
+    const pageEl = document.getElementById(`page_${name}`);
+    if (pageEl) pageEl.classList.add('active');
+    
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
     
     const titles = { users: 'Сотрудники', shifts: 'Лог Смен', pharmacies: 'Карточки Аптек' };
-    document.getElementById("pageTitle").textContent = titles[name];
+    const titleEl = document.getElementById("pageTitle");
+    if (titleEl) titleEl.textContent = titles[name] || 'Панель';
 }
 
-// Инициализация
+// Инициализация при наличии токена
 if(token) {
     loadStats();
     loadUsers();
     loadShifts();
     loadPharmacies();
     
+    // Автообновление раз в 30 секунд
     setInterval(() => {
         loadStats();
         loadUsers();
