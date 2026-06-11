@@ -105,15 +105,16 @@ async def init_db():
 @dp.message(CommandStart())
 async def start(message: Message):
     print(f"👤 /start от {message.from_user.first_name}")
+    uname = message.from_user.username or "—"
+    fname = message.from_user.first_name or "Сотрудник"
+    
     async with db_pool.acquire() as conn:
         await conn.execute("""
             INSERT INTO users (id, username, first_name)
             VALUES ($1, $2, $3)
             ON CONFLICT (id) DO UPDATE
             SET username = $2, first_name = $3
-        """, message.from_user.id,
-            message.from_user.username,
-            message.from_user.first_name)
+        """, message.from_user.id, uname, fname)
 
     try:
         await bot.set_chat_menu_button(
@@ -132,7 +133,7 @@ async def start(message: Message):
         ]]
     )
     await message.answer(
-        f"Привет, {message.from_user.first_name}! 👋\n"
+        f"Привет, {fname}! 👋\n"
         "Добро пожаловать в LEKKO APP. Кнопка быстрого запуска теперь всегда под рукой внизу экрана!",
         reply_markup=kb
     )
@@ -152,18 +153,18 @@ async def cmd_stats(message: Message):
 
     async with db_pool.acquire() as conn:
         active = await conn.fetch("""
-            SELECT first_name, start_time FROM shifts
+            SELECT COALESCE(first_name, 'Неизвестный') as first_name, start_time FROM shifts
             WHERE date=$1::TEXT AND end_time IS NULL
         """, str(today))
 
         done = await conn.fetch("""
-            SELECT first_name, start_time, end_time, worked, distance_km
+            SELECT COALESCE(first_name, 'Неизвестный') as first_name, start_time, end_time, worked, distance_km
             FROM shifts
             WHERE date=$1::TEXT AND end_time IS NOT NULL
         """, str(today))
 
         pharmacies = await conn.fetch("""
-            SELECT first_name, name, status FROM pharmacies
+            SELECT COALESCE(first_name, 'Неизвестный') as first_name, name, status FROM pharmacies
             WHERE (created_at + INTERVAL '5 hours')::DATE = $1
         """, today)
 
@@ -232,7 +233,7 @@ async def send_all_time_report():
     async with db_pool.acquire() as conn:
         staff = await conn.fetch("""
             SELECT
-                first_name,
+                COALESCE(first_name, 'Неизвестный') as first_name,
                 COUNT(*) as shifts_count,
                 COUNT(CASE WHEN end_time IS NOT NULL THEN 1 END) as completed,
                 SUM(CASE WHEN distance_km IS NOT NULL THEN distance_km ELSE 0 END) as total_distance
@@ -242,7 +243,7 @@ async def send_all_time_report():
         """)
 
         pharma = await conn.fetch("""
-            SELECT first_name, COUNT(*) as total,
+            SELECT COALESCE(first_name, 'Неизвестный') as first_name, COUNT(*) as total,
                    COUNT(CASE WHEN status='deal' THEN 1 END) as deals,
                    COUNT(CASE WHEN status='decline' THEN 1 END) as declines,
                    COUNT(CASE WHEN status='inwork' THEN 1 END) as inwork,
@@ -303,7 +304,7 @@ async def send_weekly_report():
     async with db_pool.acquire() as conn:
         staff = await conn.fetch("""
             SELECT
-                first_name,
+                COALESCE(first_name, 'Неизвестный') as first_name,
                 COUNT(*) as shifts_count,
                 COUNT(CASE WHEN end_time IS NOT NULL THEN 1 END) as completed,
                 SUM(CASE WHEN distance_km IS NOT NULL THEN distance_km ELSE 0 END) as total_distance
@@ -314,7 +315,7 @@ async def send_weekly_report():
         """, str(week_start), str(week_end))
 
         pharma = await conn.fetch("""
-            SELECT first_name, COUNT(*) as total,
+            SELECT COALESCE(first_name, 'Неизвестный') as first_name, COUNT(*) as total,
                    COUNT(CASE WHEN status='deal' THEN 1 END) as deals,
                    COUNT(CASE WHEN status='decline' THEN 1 END) as declines,
                    COUNT(CASE WHEN status='inwork' THEN 1 END) as inwork,
@@ -411,7 +412,7 @@ async def handle_event(request):
         event_type = data.get("event")
         user_data = data.get("user") or {}
         user_id = data.get("chat_id") or user_data.get("id")
-        first_name = user_data.get("first_name", "Сотрудник")
+        first_name = user_data.get("first_name") or "Сотрудник"
 
         if not user_id:
             return web.json_response({"ok": False, "error": "No chat_id found"}, headers=headers)
@@ -569,7 +570,7 @@ async def handle_data(request):
                 "softwareId": p['software_id'], "status": p['status'],
                 "comment": p['comment'], "photosCount": p['photos_count'],
                 "latitude": p['latitude'], "longitude": p['longitude'],
-                "map": p['map_link'], "date": local.strftime("%Y-%m-%d"), # Исправлено для синхронизации с фронтендом YYYY-MM-DD
+                "map": p['map_link'], "date": local.strftime("%Y-%m-%d"),
                 "time": local.strftime("%H:%M"),
                 "timestamp": int(p['created_at'].timestamp() * 1000)
             }
@@ -604,7 +605,10 @@ async def handle_admin_users(request):
         return web.json_response({"ok": False, "error": "Unauthorized"}, status=401, headers=h)
     async with db_pool.acquire() as conn:
         users = await conn.fetch("""
-            SELECT u.id, u.username, u.first_name, u.created_at,
+            SELECT u.id, 
+                COALESCE(u.username, '—') as username, 
+                COALESCE(u.first_name, 'Неизвестный') as first_name, 
+                u.created_at,
                 COUNT(DISTINCT s.id) as shifts_total,
                 COUNT(DISTINCT CASE WHEN s.end_time IS NOT NULL THEN s.id END) as shifts_done,
                 COUNT(DISTINCT p.id) as pharmas_total,
@@ -620,7 +624,7 @@ async def handle_admin_users(request):
         "id": str(r['id']),
         "username": r['username'],
         "first_name": r['first_name'],
-        "created_at": (r['created_at'] + TZ_OFFSET).strftime("%d.%m.%Y"),
+        "created_at": (r['created_at'] + TZ_OFFSET).strftime("%d.%m.%Y") if r['created_at'] else "—",
         "shifts_total": r['shifts_total'],
         "shifts_done": r['shifts_done'],
         "pharmas_total": r['pharmas_total'],
@@ -640,27 +644,29 @@ async def handle_admin_pharmacies(request):
     async with db_pool.acquire() as conn:
         if user_id:
             rows = await conn.fetch("""
-                SELECT p.*, (p.created_at + INTERVAL '5 hours') as local_time
+                SELECT p.*, (p.created_at + INTERVAL '5 hours') as local_time,
+                COALESCE(p.first_name, 'Неизвестный') as agent_name
                 FROM pharmacies p WHERE p.user_id=$1 ORDER BY p.created_at DESC
             """, int(user_id))
         else:
             rows = await conn.fetch("""
-                SELECT p.*, (p.created_at + INTERVAL '5 hours') as local_time
+                SELECT p.*, (p.created_at + INTERVAL '5 hours') as local_time,
+                COALESCE(p.first_name, 'Неизвестный') as agent_name
                 FROM pharmacies p ORDER BY p.created_at DESC LIMIT 200
             """)
     result = [{
         "id": r['id'],
-        "first_name": r['first_name'],
-        "name": r['name'],
-        "lpr_name": r['lpr_name'],
-        "lpr_phone": r['lpr_phone'],
-        "software": r['software'],
-        "software_id": r['software_id'],
-        "status": r['status'],
-        "comment": r['comment'],
-        "map_link": r['map_link'],
-        "date": r['local_time'].strftime("%d.%m.%Y"),
-        "time": r['local_time'].strftime("%H:%M")
+        "first_name": r['agent_name'],
+        "name": r['name'] or "—",
+        "lpr_name": r['lpr_name'] or "—",
+        "lpr_phone": r['lpr_phone'] or "—",
+        "software": r['software'] or "—",
+        "software_id": r['software_id'] or "",
+        "status": r['status'] or "cold",
+        "comment": r['comment'] or "",
+        "map_link": r['map_link'] or "",
+        "date": r['local_time'].strftime("%d.%m.%Y") if r['local_time'] else "—",
+        "time": r['local_time'].strftime("%H:%M") if r['local_time'] else "—"
     } for r in rows]
     return web.json_response({"ok": True, "pharmacies": result}, headers=h)
 
@@ -675,21 +681,23 @@ async def handle_admin_shifts(request):
     async with db_pool.acquire() as conn:
         if user_id:
             rows = await conn.fetch("""
-                SELECT * FROM shifts WHERE user_id=$1 ORDER BY created_at DESC
+                SELECT s.*, COALESCE(s.first_name, 'Неизвестный') as agent_name 
+                FROM shifts s WHERE s.user_id=$1 ORDER BY s.created_at DESC
             """, int(user_id))
         else:
             rows = await conn.fetch("""
-                SELECT * FROM shifts ORDER BY created_at DESC LIMIT 100
+                SELECT s.*, COALESCE(s.first_name, 'Неизвестный') as agent_name 
+                FROM shifts s ORDER BY s.created_at DESC LIMIT 100
             """)
     result = [{
         "id": r['id'],
-        "first_name": r['first_name'],
-        "date": r['date'],
-        "start_time": r['start_time'],
+        "first_name": r['agent_name'],
+        "date": r['date'] or "—",
+        "start_time": r['start_time'] or "—",
         "end_time": r['end_time'],
-        "worked": r['worked'],
-        "distance_km": r['distance_km'],
-        "map_link": r['map_link']
+        "worked": r['worked'] or "—",
+        "distance_km": r['distance_km'] or 0.0,
+        "map_link": r['map_link'] or ""
     } for r in rows]
     return web.json_response({"ok": True, "shifts": result}, headers=h)
 
@@ -706,19 +714,19 @@ async def handle_admin_stats(request):
         today_pharmas = await conn.fetchval("""
             SELECT COUNT(*) FROM pharmacies
             WHERE (created_at + INTERVAL '5 hours')::DATE = $1
-        """, today)
+        """, today) or 0
         today_shifts = await conn.fetchval("""
             SELECT COUNT(*) FROM shifts WHERE date=$1::TEXT AND end_time IS NOT NULL
-        """, str(today))
+        """, str(today)) or 0
         active_shifts = await conn.fetchval("""
             SELECT COUNT(*) FROM shifts WHERE end_time IS NULL
-        """)
+        """) or 0
         week_pharmas = await conn.fetchval("""
             SELECT COUNT(*) FROM pharmacies
             WHERE (created_at + INTERVAL '5 hours')::DATE >= $1
-        """, week_start)
-        total_pharmas = await conn.fetchval("SELECT COUNT(*) FROM pharmacies")
-        total_users = await conn.fetchval("SELECT COUNT(*) FROM users")
+        """, week_start) or 0
+        total_pharmas = await conn.fetchval("SELECT COUNT(*) FROM pharmacies") or 0
+        total_users = await conn.fetchval("SELECT COUNT(*) FROM users") or 0
     return web.json_response({"ok": True, "stats": {
         "today_pharmas": today_pharmas,
         "today_shifts": today_shifts,
@@ -735,7 +743,7 @@ async def cmd_users(message: Message):
         await message.answer("❌ Нет доступа.")
         return
     async with db_pool.acquire() as conn:
-        users = await conn.fetch("SELECT id, username, first_name, created_at FROM users ORDER BY created_at DESC")
+        users = await conn.fetch("SELECT id, username, COALESCE(first_name, 'Неизвестный') as first_name, created_at FROM users ORDER BY created_at DESC")
         counts = await conn.fetch("""
             SELECT u.id,
                 COUNT(DISTINCT s.id) as shifts,

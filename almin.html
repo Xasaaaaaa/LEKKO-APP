@@ -57,7 +57,7 @@ td { padding: 16px 20px; border-bottom: 1px solid rgba(32,210,180,0.08); color: 
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: rgba(255,255,255,0.01); }
 
-/* Модалка/Уведомление авторизации */
+/* Уведомление авторизации */
 .auth-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .auth-box { background: var(--card); border: 1px solid var(--danger); padding: 35px; border-radius: 24px; text-align: center; max-width: 400px; }
 
@@ -270,22 +270,26 @@ async function loadPharmacies() {
 function renderUsers() {
     const tbody = document.getElementById("usersTable");
     if (!tbody) return;
-    tbody.innerHTML = allUsers.map(u => `
-        <tr>
-            <td><b style="color:var(--white); font-size:15px;">${u.first_name || 'Неизвестный'}</b><br><span style="color:var(--muted); font-size:11px;">ID: ${u.id}</span></td>
-            <td style="color:var(--teal);">${u.username ? '@'+u.username : '—'}</td>
-            <td>${u.shifts_total || 0} <span style="color:var(--muted); font-size:12px;">(завершено: ${u.shifts_done || 0})</span></td>
-            <td style="font-weight:600; color:var(--white);">${u.pharmas_total || 0}</td>
-            <td style="color:var(--green); font-weight:600;">${u.deals || 0}</td>
-            <td style="color:var(--muted); font-size:13px;">${u.last_shift || '—'}</td>
-        </tr>
-    `).join("") || '<tr><td colspan="6" style="color:var(--muted); text-align:center;">Нет сотрудников в базе</td></tr>';
+    tbody.innerHTML = allUsers.map(u => {
+        if (!u) return '';
+        return `
+            <tr>
+                <td><b style="color:var(--white); font-size:15px;">${u.first_name || 'Неизвестный'}</b><br><span style="color:var(--muted); font-size:11px;">ID: ${u.id || '—'}</span></td>
+                <td style="color:var(--teal);">${u.username ? '@'+u.username : '—'}</td>
+                <td>${u.shifts_total || 0} <span style="color:var(--muted); font-size:12px;">(завершено: ${u.shifts_done || 0})</span></td>
+                <td style="font-weight:600; color:var(--white);">${u.pharmas_total || 0}</td>
+                <td style="color:var(--green); font-weight:600;">${u.deals || 0}</td>
+                <td style="color:var(--muted); font-size:13px;">${u.last_shift || '—'}</td>
+            </tr>
+        `;
+    }).join("") || '<tr><td colspan="6" style="color:var(--muted); text-align:center;">Нет сотрудников в базе</td></tr>';
 }
 
 function renderShifts(arr) {
     const tbody = document.getElementById("shiftsTable");
     if (!tbody) return;
     tbody.innerHTML = arr.map(s => {
+        if (!s) return '';
         let displayDate = '—';
         if (s.date) {
             const dateStr = String(s.date);
@@ -299,7 +303,7 @@ function renderShifts(arr) {
         return `
             <tr>
                 <td style="color:var(--muted); font-weight:500;">${displayDate}</td>
-                <td><b>${s.first_name || '—'}</b></td>
+                <td><b>${s.first_name || 'Неизвестный'}</b></td>
                 <td>${s.start_time || '—'}</td>
                 <td>${s.end_time || '<span class="badge" style="background:rgba(46,221,142,0.12); color:var(--green);">● Активна</span>'}</td>
                 <td style="color:var(--teal); font-weight:500;">${s.worked || '—'}</td>
@@ -315,18 +319,21 @@ function renderPharmacies(arr) {
     if (!tbody) return;
     const statuses = { cold: 'Холодный', inwork: 'В работе', deal: 'Договорились', decline: 'Отказ' };
     
-    tbody.innerHTML = arr.map(p => `
-        <tr>
-            <td><span style="color:var(--white); font-weight:500;">${p.date || '—'}</span><br><span style="color:var(--muted); font-size:12px;">⏱ ${p.time || '—'}</span></td>
-            <td><b>${p.first_name || '—'}</b></td>
-            <td><span style="font-size:15px; font-weight:600; color:var(--white);">${p.name || '—'}</span></td>
-            <td>${p.lpr_name || '—'}<br><span style="color:var(--muted); font-size:13px;">${p.lpr_phone || '—'}</span></td>
-            <td><b>${p.software || '—'}</b>${p.software_id ? `<br><span style="color:var(--warn); font-size:12px; font-family:monospace;">ID: ${p.software_id}</span>` : ''}</td>
-            <td><span class="badge ${p.status || 'cold'}">${statuses[p.status] || p.status || '—'}</span></td>
-            <td style="font-style:italic; color:var(--muted); max-width:250px; white-space:normal; word-break:break-word;">${p.comment ? '«'+p.comment+'»' : '—'}</td>
-            <td>${p.map_link ? `<a href="${p.map_link}" target="_blank" style="color:var(--teal); text-decoration:none; font-size:16px;">📍 Карта</a>` : '—'}</td>
-        </tr>
-    `).join("") || '<tr><td colspan="8" style="color:var(--muted); text-align:center; padding:20px;">Нет данных по заданным фильтрам</td></tr>';
+    tbody.innerHTML = arr.map(p => {
+        if (!p) return '';
+        return `
+            <tr>
+                <td><span style="color:var(--white); font-weight:500;">${p.date || '—'}</span><br><span style="color:var(--muted); font-size:12px;">⏱ ${p.time || '—'}</span></td>
+                <td><b>${p.first_name || 'Неизвестный'}</b></td>
+                <td><span style="font-size:15px; font-weight:600; color:var(--white);">${p.name || '—'}</span></td>
+                <td>${p.lpr_name || '—'}<br><span style="color:var(--muted); font-size:13px;">${p.lpr_phone || '—'}</span></td>
+                <td><b>${p.software || '—'}</b>${p.software_id ? `<br><span style="color:var(--warn); font-size:12px; font-family:monospace;">ID: ${p.software_id}</span>` : ''}</td>
+                <td><span class="badge ${p.status || 'cold'}">${statuses[p.status] || p.status || '—'}</span></td>
+                <td style="font-style:italic; color:var(--muted); max-width:250px; white-space:normal; word-break:break-word;">${p.comment ? '«'+p.comment+'»' : '—'}</td>
+                <td>${p.map_link ? `<a href="${p.map_link}" target="_blank" style="color:var(--teal); text-decoration:none; font-size:16px;">📍 Карта</a>` : '—'}</td>
+            </tr>
+        `;
+    }).join("") || '<tr><td colspan="8" style="color:var(--muted); text-align:center; padding:20px;">Нет данных по заданным фильтрам</td></tr>';
 }
 
 function filterShifts() {
@@ -334,10 +341,15 @@ function filterShifts() {
     const dateInput = document.getElementById("shiftDate").value;
     
     let filtered = allShifts;
-    if (q) filtered = filtered.filter(s => s.first_name && s.first_name.toLowerCase().includes(q));
+    if (q) {
+        filtered = filtered.filter(s => {
+            if (!s || !s.first_name) return false;
+            return String(s.first_name).toLowerCase().includes(q);
+        });
+    }
     if (dateInput) {
         filtered = filtered.filter(s => {
-            if (!s.date) return false;
+            if (!s || !s.date) return false;
             const sDateStr = String(s.date);
             const reversedInput = dateInput.split('-').reverse().join('.');
             return sDateStr === dateInput || sDateStr === reversedInput;
@@ -359,16 +371,18 @@ function filterPharmacies() {
     
     let filtered = allPharmacies;
     if (q) {
-        filtered = filtered.filter(p => 
-            (p.name && p.name.toLowerCase().includes(q)) || 
-            (p.first_name && p.first_name.toLowerCase().includes(q))
-        );
+        filtered = filtered.filter(p => {
+            if (!p) return false;
+            const nameMatch = p.name ? String(p.name).toLowerCase().includes(q) : false;
+            const agentMatch = p.first_name ? String(p.first_name).toLowerCase().includes(q) : false;
+            return nameMatch || agentMatch;
+        });
     }
-    if (status) filtered = filtered.filter(p => p.status === status);
+    if (status) filtered = filtered.filter(p => p && p.status === status);
     if (dateInput) {
         const formattedDate = dateInput.split('-').reverse().join('.');
         filtered = filtered.filter(p => {
-            if (!p.date) return false;
+            if (!p || !p.date) return false;
             const pDateStr = String(p.date);
             return pDateStr === formattedDate || pDateStr === dateInput;
         });
@@ -383,7 +397,6 @@ function clearPharmFilters() {
     renderPharmacies(allPharmacies);
 }
 
-// Новая безопасная функция смены страниц без привязки к window.event
 function showPage(name, buttonElement) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -391,11 +404,9 @@ function showPage(name, buttonElement) {
     const pageEl = document.getElementById(`page_${name}`);
     if (pageEl) pageEl.classList.add('active');
     
-    // Если кнопка передана явно через this
     if (buttonElement) {
         buttonElement.classList.add('active');
     } else {
-        // Резервный поиск кнопки по id для автоматического старта
         const backupBtn = document.getElementById(`btn_${name}`);
         if (backupBtn) backupBtn.classList.add('active');
     }
