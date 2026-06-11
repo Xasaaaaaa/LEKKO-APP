@@ -26,7 +26,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--w
 /* Боковое меню */
 .sidebar { width: 260px; background: var(--bg2); border-right: 1px solid var(--border); padding: 30px 20px; display: flex; flex-direction: column; }
 .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 24px; color: var(--teal); letter-spacing: 1px; margin-bottom: 40px; text-align: center; }
-.nav-btn { background: transparent; border: none; color: var(--muted); padding: 14px 18px; text-align: left; font-size: 15px; font-weight: 500; border-radius: 12px; cursor: pointer; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; transition: 0.2s; }
+.nav-btn { background: transparent; border: none; color: var(--muted); padding: 14px 18px; text-align: left; font-size: 15px; font-weight: 500; border-radius: 12px; cursor: pointer; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; transition: 0.2s; width: 100%; }
 .nav-btn:hover { background: rgba(32,210,180,0.05); color: var(--teal); }
 .nav-btn.active { background: linear-gradient(135deg, var(--teal), var(--teal2)); color: #080f1a; font-weight: 600; box-shadow: 0 4px 15px rgba(32,210,180,0.2); }
 
@@ -83,9 +83,9 @@ tr:hover td { background: rgba(255,255,255,0.01); }
 
 <div class="sidebar">
     <div class="logo">LEKKO ADMIN</div>
-    <button class="nav-btn active" onclick="showPage('users')">👥 Сотрудники</button>
-    <button class="nav-btn" onclick="showPage('shifts')">🕒 Лог Смен</button>
-    <button class="nav-btn" onclick="showPage('pharmacies')">🏥 Карточки Аптек</button>
+    <button id="btn_users" class="nav-btn active" onclick="showPage('users', this)">👥 Сотрудники</button>
+    <button id="btn_shifts" class="nav-btn" onclick="showPage('shifts', this)">🕒 Лог Смен</button>
+    <button id="btn_pharmacies" class="nav-btn" onclick="showPage('pharmacies', this)">🏥 Карточки Аптек</button>
 </div>
 
 <div class="main">
@@ -161,7 +161,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
 
     <div id="page_pharmacies" class="page">
         <div class="filter-bar">
-            <input type="text" id="pharmSearch" class="input-control" placeholder="Поиск по названием или агенту..." oninput="filterPharmacies()">
+            <input type="text" id="pharmSearch" class="input-control" placeholder="Поиск по названию или агенту..." oninput="filterPharmacies()">
             <input type="date" id="pharmDate" class="input-control" onchange="filterPharmacies()">
             <select id="pharmStatus" class="input-control" onchange="filterPharmacies()">
                 <option value="">Все статусы</option>
@@ -221,7 +221,6 @@ async function loadStats() {
         const res = await fetch(`${SERVER}/admin/stats?token=${token}`);
         const data = await res.json();
         if(data.ok && data.stats) {
-            // Безопасное обновление с проверкой наличия ID в разметке
             const tPharmas = document.getElementById("st_total_pharmas");
             const tToday = document.getElementById("st_today_pharmas");
             const aShifts = document.getElementById("st_active_shifts");
@@ -384,15 +383,21 @@ function clearPharmFilters() {
     renderPharmacies(allPharmacies);
 }
 
-function showPage(name) {
+// Новая безопасная функция смены страниц без привязки к window.event
+function showPage(name, buttonElement) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     
     const pageEl = document.getElementById(`page_${name}`);
     if (pageEl) pageEl.classList.add('active');
     
-    if (event && event.target) {
-        event.target.classList.add('active');
+    // Если кнопка передана явно через this
+    if (buttonElement) {
+        buttonElement.classList.add('active');
+    } else {
+        // Резервный поиск кнопки по id для автоматического старта
+        const backupBtn = document.getElementById(`btn_${name}`);
+        if (backupBtn) backupBtn.classList.add('active');
     }
     
     const titles = { users: 'Сотрудники', shifts: 'Лог Смен', pharmacies: 'Карточки Аптек' };
@@ -400,14 +405,13 @@ function showPage(name) {
     if (titleEl) titleEl.textContent = titles[name] || 'Панель';
 }
 
-// Инициализация при наличии токена
+// Инициализация
 if(token) {
     loadStats();
     loadUsers();
     loadShifts();
     loadPharmacies();
     
-    // Автообновление раз в 30 секунд
     setInterval(() => {
         loadStats();
         loadUsers();
