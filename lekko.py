@@ -455,42 +455,55 @@ async def handle_event(request):
         elif event_type == "pharmacy_add":
             sw_name = data.get("software")
             sw_id = data.get("softwareId")
+            
+            p_user_id = int(user_id) if user_id else 0
+            p_name = data.get("name") or "—"
+            p_lpr_name = data.get("lprName") or "—"
+            p_lpr_phone = data.get("lprPhone") or "—"
+            p_status = data.get("status") or "cold"
+            p_comment = data.get("comment") or ""
+            p_photos = int(data.get("photosCount", 0)) if data.get("photosCount") else 0
             p_lat = float(lat) if lat else None
             p_lon = float(lon) if lon else None
-            p_photos = int(data.get("photosCount", 0))
+            p_map_link = map_link or ""
 
             async with db_pool.acquire() as conn:
                 await conn.execute("""
-                    INSERT INTO pharmacies (user_id, first_name, name, lpr_name, lpr_phone, software, software_id, status, comment, photos_count, latitude, longitude, map_link)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-                """, int(user_id), first_name, data.get("name"), data.get("lprName"), data.get("lprPhone"),
-                    sw_name, sw_id, data.get("status"), data.get("comment"), p_photos, p_lat, p_lon, map_link)
+                    INSERT INTO pharmacies (
+                        user_id, first_name, name, lpr_name, lpr_phone, 
+                        software, software_id, status, comment, photos_count, 
+                        latitude, longitude, map_link
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                """, 
+                p_user_id, first_name, p_name, p_lpr_name, p_lpr_phone,
+                sw_name, sw_id, p_status, p_comment, p_photos, 
+                p_lat, p_lon, p_map_link)
 
             address_text = ""
             if lat and lon:
                 addr = await get_address(lat, lon)
-                address_text = f"\n📍 Адрес: {addr}\n🗺 [Google Maps]({map_link})"
+                address_text = f"\n📍 Адрес: {addr}\n🗺 [Google Maps]({p_map_link})"
 
             sw_display = f"{sw_name} (🆔 ID: {sw_id})" if sw_id else sw_name
 
             text = (
                 f"🏥 *Добавлена новая аптека!*\n"
                 f"👤 Сотрудник: {first_name}\n"
-                f"🏪 Название: {data.get('name')}\n"
-                f"👤 ЛПР: {data.get('lprName')}\n"
-                f"📞 Телефон: {data.get('lprPhone')}\n"
+                f"🏪 Название: {p_name}\n"
+                f"👤 ЛПР: {p_lpr_name}\n"
+                f"📞 Телефон: {p_lpr_phone}\n"
                 f"💻 Программа: {sw_display}\n"
-                f"📊 Статус: {data.get('status') or '—'}\n"
-                f"💬 Комментарий: {data.get('comment') or '—'}\n"
+                f"📊 Статус: {p_status}\n"
+                f"💬 Комментарий: {p_comment or '—'}\n"
                 f"📸 Фото: {p_photos} шт."
                 f"{address_text}"
             )
 
-            await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown")
+            await bot.send_message(chat_id=p_user_id, text=text, parse_mode="Markdown")
             if lat and lon:
-                await bot.send_location(chat_id=int(user_id), latitude=p_lat, longitude=p_lon)
+                await bot.send_location(chat_id=p_user_id, latitude=p_lat, longitude=p_lon)
 
-            if int(user_id) != ADMIN_ID:
+            if p_user_id != ADMIN_ID:
                 await notify_admin(text, lat, lon)
 
     except Exception as e:
