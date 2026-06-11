@@ -256,7 +256,7 @@ function clearPharmacyForm() {
 }
 
 // =========================
-// ВАЛИДАЦИЯ И СОХРАНЕНИЕ
+// ВАЛИДАЦИЯ И СОХРАНЕНИЕ АПТЕКИ
 // =========================
 
 function savePharmacy() {
@@ -288,7 +288,7 @@ function savePharmacy() {
         function(pos) {
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
-            const mapLink = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+            const mapLink = `http://googleusercontent.com/maps.google.com/maps?q=${lat},${lon}`;
 
             const data = {
                 event: "pharmacy_add",
@@ -305,7 +305,7 @@ function savePharmacy() {
                 longitude: lon,
                 map: mapLink,
                 timestamp: Date.now(),
-                date: new Date().toLocaleDateString("ru-RU"),
+                date: new Date().toISOString().split('T')[0], // Синхронизировано в YYYY-MM-DD
                 time: new Date().toLocaleTimeString("ru-RU", {hour: '2-digit', minute: '2-digit'})
             };
 
@@ -313,10 +313,8 @@ function savePharmacy() {
             addPharmacyStat();
 
             try {
-                // data in DB cache
-                localHistory.unshift(data);
-                // data stored in DB
-            } catch(e) { console.error("Ошибка локальной истории:", e); }
+                dbCache.pharmacies.unshift(data);
+            } catch(e) { console.error("Ошибка локального кэша аптек:", e); }
 
             showPharmacyCard(data);
         },
@@ -369,10 +367,6 @@ function renderPharmacyHistory() {
     if (!list) return;
     
     let history = dbCache.pharmacies || [];
-    try {
-    history = dbCache.pharmacies || [];
-    } catch(e) { history = []; }
-    
     if (history.length === 0) {
         list.innerHTML = `<div style="text-align:center;color:var(--muted);padding:40px 0;font-size:14px;">📭 История аптек пуста</div>`;
         return;
@@ -385,24 +379,27 @@ function renderPharmacyHistory() {
         decline: "❌ Отказ"
     };
 
-    list.innerHTML = history.map(item => `
-        <div class="history-item" style="line-height:1.6; background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px; margin-bottom:10px;">
-            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px;">
-                <span>📅 ${item.date || '—'} ${item.time || ''}</span>
-                <span style="color:var(--teal);font-weight:500;">${statusLabels[item.status] || item.status}</span>
+    list.innerHTML = history.map(item => {
+        const displayDate = item.date ? item.date.split('-').reverse().join('.') : '—';
+        return `
+            <div class="history-item" style="line-height:1.6; background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px; margin-bottom:10px;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px;">
+                    <span>📅 ${displayDate} ${item.time || ''}</span>
+                    <span style="color:var(--teal);font-weight:500;">${statusLabels[item.status] || item.status}</span>
+                </div>
+                <div style="font-size:16px;font-weight:700;color:var(--white);margin-bottom:6px;">🏥 ${item.name}</div>
+                <div style="font-size:13px;color:var(--muted);">👤 ЛПР: <b style="color:var(--white);">${item.lprName || '—'}</b></div>
+                <div style="font-size:13px;color:var(--muted);">📞 Тел: <b style="color:var(--white);">${item.lprPhone}</b></div>
+                <div style="font-size:13px;color:var(--muted);">💻 ПО: <b style="color:var(--white);">${item.software}${item.softwareId ? ' (ID: '+item.softwareId+')' : ''}</b></div>
+                ${item.comment ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.05);font-size:13px;color:var(--muted);font-style:italic;">💬 ${item.comment}</div>` : ""}
+                ${item.latitude ? `
+                    <a href="http://maps.google.com/?q=${item.latitude},${item.longitude}" target="_blank" style="display:inline-block;margin-top:8px;font-size:13px;color:var(--accent);text-decoration:none;font-weight:500;">
+                        📍 Открыть локацию в Google Maps
+                    </a>
+                ` : ""}
             </div>
-            <div style="font-size:16px;font-weight:700;color:var(--white);margin-bottom:6px;">🏥 ${item.name}</div>
-            <div style="font-size:13px;color:var(--muted);">👤 ЛПР: <b style="color:var(--white);">${item.lprName || '—'}</b></div>
-            <div style="font-size:13px;color:var(--muted);">📞 Тел: <b style="color:var(--white);">${item.lprPhone}</b></div>
-            <div style="font-size:13px;color:var(--muted);">💻 ПО: <b style="color:var(--white);">${item.software}${item.softwareId ? ' (ID: '+item.softwareId+')' : ''}</b></div>
-            ${item.comment ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.05);font-size:13px;color:var(--muted);font-style:italic;">💬 ${item.comment}</div>` : ""}
-            ${item.latitude ? `
-                <a href="https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}" target="_blank" style="display:inline-block;margin-top:8px;font-size:13px;color:var(--accent);text-decoration:none;font-weight:500;">
-                    📍 Открыть локацию в Google Maps
-                </a>
-            ` : ""}
-        </div>
-    `).join("");
+        `;
+    }).join("");
 }
 
 // =========================
@@ -411,22 +408,19 @@ function renderPharmacyHistory() {
 
 function openMapForToday() {
     let history = dbCache.pharmacies || [];
-    
-    const today = new Date().toLocaleDateString("ru-RU");
+    const today = new Date().toISOString().split('T')[0];
     const todayPharms = history.filter(p => p.date === today && p.latitude && p.longitude);
 
     if (todayPharms.length === 0) {
         showToast("📭 Сегодня аптек с геолокацией нет");
         return;
     }
-
     todayPharms.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
     openGoogleMapsWithPoints(todayPharms);
 }
 
 function openMapForPeriod(days) {
     let history = dbCache.pharmacies || [];
-    
     const from = Date.now() - days * 86400000;
     const filtered = history.filter(p => p.timestamp && p.timestamp >= from && p.latitude && p.longitude);
 
@@ -434,7 +428,6 @@ function openMapForPeriod(days) {
         showToast(`📭 За ${days} дней аптек с геолокацией нет`);
         return;
     }
-
     filtered.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
     openGoogleMapsWithPoints(filtered);
 }
@@ -442,27 +435,23 @@ function openMapForPeriod(days) {
 function openGoogleMapsWithPoints(pharmacies) {
     if (pharmacies.length === 1) {
         const p = pharmacies[0];
-        window.open(`https://www.google.com/maps/search/?api=1&query=${p.latitude},${p.longitude}`, "_blank");
+        window.open(`http://maps.google.com/?q=${p.latitude},${p.longitude}`, "_blank");
         return;
     }
 
     const origin = `${pharmacies[0].latitude},${pharmacies[0].longitude}`;
     const destination = `${pharmacies[pharmacies.length - 1].latitude},${pharmacies[pharmacies.length - 1].longitude}`;
-
-    const waypoints = pharmacies.slice(1, -1)
-        .map(p => `${p.latitude},${p.longitude}`)
-        .join("|");
+    const waypoints = pharmacies.slice(1, -1).map(p => `${p.latitude},${p.longitude}`).join("|");
 
     let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking`;
     if (waypoints) {
         url += `&waypoints=${encodeURIComponent(waypoints)}`;
     }
-
     window.open(url, "_blank");
 }
 
 // =========================
-// МАСКА ДЛЯ ТЕЛЕФОНА ЛПР
+// МАСКА ДЛЯ ТЕЛЕФОНА ЛПР (+998)
 // =========================
 
 function setupPhoneMask() {
@@ -484,7 +473,7 @@ function setupPhoneMask() {
         if (def.length >= val.length) val = def;
 
         input.value = matrix.replace(/./g, function(a) {
-            return /[_\d]/.test(a) && i < val.length ? val.charAt(i++) : i >= val.length ? "" : a;
+            return /[_/\d]/.test(a) && i < val.length ? val.charAt(i++) : i >= val.length ? "" : a;
         });
     });
     
@@ -495,12 +484,9 @@ function setupPhoneMask() {
     });
 }
 
-// =========================
-// СТАТИСТИКА И ПРОФИЛЬ
-// =========================
-
 function addPharmacyStat() {
     dbCache.dayFact += 1;
+    localStorage.setItem("dayFact", dbCache.dayFact);
 }
 
 function renderProfile() {
@@ -513,14 +499,8 @@ function renderProfile() {
             avatarEl.innerText = user.first_name.charAt(0).toUpperCase();
         }
     }
-    
-    if(document.getElementById("stat_shifts_count")) {
-        document.getElementById("stat_shifts_count").innerText = (dbCache.shifts || []).length;
-    }
-
-    if(document.getElementById("stat_pharmacies_count")) {
-        document.getElementById("stat_pharmacies_count").innerText = (dbCache.pharmacies || []).length;
-    }
+    if(document.getElementById("stat_shifts_count")) document.getElementById("stat_shifts_count").innerText = (dbCache.shifts || []).length;
+    if(document.getElementById("stat_pharmacies_count")) document.getElementById("stat_pharmacies_count").innerText = (dbCache.pharmacies || []).length;
 }
 
 // =========================
@@ -537,11 +517,12 @@ function startShift() {
         return; 
     }
 
-    localStorage.setItem("shift_start", new Date().getTime());
+    const startTimeTicks = new Date().getTime();
+    localStorage.setItem("shift_start", startTimeTicks);
     localStorage.setItem("dayPlan", 10);
     localStorage.setItem("dayFact", 0);
 
-    showToast("🟢 Получаем локацию...");
+    showToast("🟢 Получаем локацию старта...");
 
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -549,16 +530,32 @@ function startShift() {
                 const lat = pos.coords.latitude;
                 const lon = pos.coords.longitude;
                 shiftStartLocation = { lat, lon };
+                
+                const timeStr = new Date(startTimeTicks).toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'});
+                const todayISO = new Date().toISOString().split('T')[0];
+                const mapLink = `http://maps.google.com/?q=${lat},${lon}`;
+
+                sendToServer({
+                    event: "shift_start",
+                    user: user,
+                    startTime: timeStr,
+                    latitude: lat,
+                    longitude: lon,
+                    map: mapLink,
+                    date: todayISO
+                });
 
                 showToast("🟢 Смена успешно начата");
                 checkUndoWindow();
                 renderDailyPlan();
+                renderDashboard();
             },
             function() {
-                showToast("⚠️ Не удалось получить локацию старта");
+                showToast("⚠️ Ошибка геопозиции. Смена начата в оффлайне.");
                 checkUndoWindow();
                 renderDailyPlan();
-            }
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
         );
     } else {
         showToast("⚠️ Геолокация не поддерживается");
@@ -594,33 +591,23 @@ function endShift() {
     showToast("🔴 Получаем финальную локацию...");
 
     function finish(endLoc = null) {
-        const historyItem = {
-            date: new Date(Number(start)).toLocaleDateString("ru-RU"),
-            start: new Date(Number(start)).toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'}),
-            end: new Date(end).toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'}),
-            duration: durationMin,
-            fact: localStorage.getItem("dayFact") || 0,
-            startLat: shiftStartLocation?.lat || null,
-            startLon: shiftStartLocation?.lon || null,
-            endLat: endLoc?.lat || null,
-            endLon: endLoc?.lon || null,
-            startMap: shiftStartLocation ? `https://www.google.com/maps/search/?api=1&query=${shiftStartLocation.lat},${shiftStartLocation.lon}` : null,
-            endMap: endLoc ? `https://www.google.com/maps/search/?api=1&query=${endLoc.lat},${endLoc.lon}` : null,
-            startTimestamp: Number(start),
-            endTimestamp: end
-        };
+        const now = new Date();
+        const todayISO = now.toISOString().split('T')[0];
 
-
-        // shift stored in DB
-
+        const timeStartStr = new Date(Number(start)).toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'});
+        const timeEndStr = now.toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'});
+        const mapLink = endLoc ? `http://maps.google.com/?q=${endLoc.lat},${endLoc.lon}` : "";
 
         sendToServer({
             event: "shift_end",
             user: user,
-            duration: durationMin,
-            fact: historyItem.fact,
-            startLocation: shiftStartLocation,
-            endLocation: endLoc
+            startTime: timeStartStr,
+            endTime: timeEndStr,
+            worked: durationMin + " мин",
+            date: todayISO,
+            latitude: endLoc ? endLoc.lat : null,
+            longitude: endLoc ? endLoc.lon : null,
+            map: mapLink
         });
 
         localStorage.removeItem("shift_start");
@@ -640,7 +627,10 @@ function endShift() {
                 shiftEndLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude };
                 finish(shiftEndLocation);
             },
-            function() { finish(null); }
+            function() { 
+                finish(null); 
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
         );
     } else {
         finish(null);
@@ -681,7 +671,7 @@ function renderDailyPlan() {
     if (!start) { planDiv.innerHTML = ""; return; }
     
     const p = localStorage.getItem("dayPlan") || 10;
-    const f = localStorage.getItem("dayFact") || 0;
+    const f = dbCache.dayFact || localStorage.getItem("dayFact") || 0;
     planDiv.innerHTML = `
         <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border)">
             <p>Выполнение плана на день: <b>${f} из ${p} аптек</b></p>
@@ -713,24 +703,27 @@ function validatePharmacyForm() {
 
 function renderHistory() {
     const list = document.getElementById("historyList");
+    if (!list) return;
     
+    let history = dbCache.shifts || [];
     if (history.length === 0) {
         list.innerHTML = "<p style='text-align:center;color:var(--muted);padding:20px;'>История смен пуста</p>";
         return;
     }
     
-    list.innerHTML = history.map(item => `
-        <div class="history-item" style="background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px; margin-bottom:10px;">
-            <p>📅 Дата: <b>${item.date}</b></p>
-            <p>⏱ Время: <b>${item.start} - ${item.end}</b> (${item.duration} мин)</p>
-            <p>🏪 Посещено аптек: <b style="color:var(--teal);">${item.fact}</b></p>
-            ${item.startMap ? `<p style="margin-top:6px;">📍 Старт: <a href="${item.startMap}" target="_blank" style="color:var(--accent); text-decoration:none;">открыть карту</a></p>` : ""}
-            ${item.endMap ? `<p>📍 Финиш: <a href="${item.endMap}" target="_blank" style="color:var(--accent); text-decoration:none;">открыть карту</a></p>` : ""}
-        </div>
-    `).join("");
+    list.innerHTML = history.map(item => {
+        const displayDate = item.date ? item.date.split('-').reverse().join('.') : '—';
+        return `
+            <div class="history-item" style="background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px; margin-bottom:10px;">
+                <p>📅 Дата: <b>${displayDate}</b></p>
+                <p>⏱ Время: <b>${item.start || '—'} - ${item.end || '—'}</b> (${item.duration || '0 мин'})</p>
+                <p>🏪 Посещено аптек: <b style="color:var(--teal);">${item.fact || 0}</b></p>
+                ${item.startMap ? `<p style="margin-top:6px;">📍 Маршрут: <a href="${item.startMap}" target="_blank" style="color:var(--accent); text-decoration:none;">Открыть в картах</a></p>` : ""}
+            </div>
+        `;
+    }).join("");
 }
 
-// Инициализация при загрузке страницы
 document.addEventListener("DOMContentLoaded", () => {
     setupPhoneMask();
     setupSoftwareIdMask();
@@ -758,17 +751,15 @@ let mapPolyline = null;
 
 function initMap() {
     if (mapInstance) {
-        setTimeout(() => {
-            mapInstance.invalidateSize();
-        }, 100);
+        setTimeout(() => { mapInstance.invalidateSize(); }, 100);
         return;
     }
 
     mapInstance = L.map('map-canvas').setView([41.311081, 69.240562], 12);
-    mapMarkersGroup = L.featureGroup().addTo(mapInstance);
+    mapMarkersGroup = L.featureGroup().addTo(getAdminTokenFeatureGroup() || mapInstance);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        attribution: '© OpenStreetMap contributors © CARTO',
         subdomains: 'abcd',
         maxZoom: 20
     }).addTo(mapInstance);
@@ -776,14 +767,11 @@ function initMap() {
 
 function showMapForToday() {
     let history = dbCache.pharmacies || [];
-    
-    const today = new Date().toLocaleDateString("ru-RU");
+    const today = new Date().toISOString().split('T')[0];
     const todayPharms = history.filter(p => p.date === today && p.latitude && p.longitude);
 
     updateMapControlActiveButton(0);
-    document.getElementById("mapShiftSelect").value = "";
-    document.getElementById("mapDateFrom").value = "";
-    document.getElementById("mapDateTo").value = "";
+    if(document.getElementById("mapShiftSelect")) document.getElementById("mapShiftSelect").value = "";
 
     if (todayPharms.length === 0) {
         clearMapData();
@@ -797,14 +785,11 @@ function showMapForToday() {
 
 function showMapForWeek() {
     let history = dbCache.pharmacies || [];
-    
     const from = Date.now() - 7 * 86400000;
     const filtered = history.filter(p => p.timestamp && p.timestamp >= from && p.latitude && p.longitude);
 
     updateMapControlActiveButton(1);
-    document.getElementById("mapShiftSelect").value = "";
-    document.getElementById("mapDateFrom").value = "";
-    document.getElementById("mapDateTo").value = "";
+    if(document.getElementById("mapShiftSelect")) document.getElementById("mapShiftSelect").value = "";
 
     if (filtered.length === 0) {
         clearMapData();
@@ -818,13 +803,10 @@ function showMapForWeek() {
 
 function showMapForAll() {
     let history = dbCache.pharmacies || [];
-    
     const filtered = history.filter(p => p.latitude && p.longitude);
 
     updateMapControlActiveButton(2);
-    document.getElementById("mapShiftSelect").value = "";
-    document.getElementById("mapDateFrom").value = "";
-    document.getElementById("mapDateTo").value = "";
+    if(document.getElementById("mapShiftSelect")) document.getElementById("mapShiftSelect").value = "";
 
     if (filtered.length === 0) {
         clearMapData();
@@ -841,16 +823,13 @@ function populateShiftDropdown() {
     if (!select) return;
 
     select.innerHTML = '<option value="" disabled selected>🔍 Выбрать смену из истории...</option>';
-
     let shiftHistory = dbCache.shifts || [];
-    try {
-        shiftHistory = dbCache.shifts || [];
-    } catch(e) { return; }
 
     shiftHistory.forEach((shift, index) => {
         const option = document.createElement("option");
         option.value = index;
-        option.textContent = `📅 ${shift.date} (${shift.start} - ${shift.end}) — ${shift.fact} апт.`;
+        const displayDate = shift.date ? shift.date.split('-').reverse().join('.') : '—';
+        option.textContent = `📅 ${displayDate} (${shift.start || ''} - ${shift.end || ''}) — ${shift.fact || 0} апт.`;
         select.appendChild(option);
     });
 }
@@ -863,86 +842,32 @@ function showMapForSelectedShift() {
     if (shiftIndex === "") return;
 
     updateMapControlActiveButton(-1);
-    document.getElementById("mapDateFrom").value = "";
-    document.getElementById("mapDateTo").value = "";
-
     let shiftHistory = dbCache.shifts || [];
-    try {
-        shiftHistory = dbCache.shifts || [];
-    } catch(e) { return; }
-
     const shift = shiftHistory[shiftIndex];
     if (!shift) return;
-    let history = dbCache.pharmacies || [];
 
+    let history = dbCache.pharmacies || [];
     let shiftPharms = [];
     
-    if (shift.startTimestamp && shift.endTimestamp) {
-        shiftPharms = history.filter(p => p.timestamp && p.timestamp >= shift.startTimestamp && p.timestamp <= shift.endTimestamp && p.latitude && p.longitude);
+    if (shift.startTimestamp) {
+        shiftPharms = history.filter(p => p.timestamp && p.timestamp >= shift.startTimestamp && p.latitude && p.longitude);
     } else {
         shiftPharms = history.filter(p => p.date === shift.date && p.latitude && p.longitude);
-        shiftPharms.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
     }
-
-    shiftPharms.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 
     clearMapData();
-
-    if (shift.startLat && shift.startLon) {
-        const startMarker = L.circleMarker([shift.startLat, shift.startLon], {
-            radius: 9,
-            fillColor: '#2f80ed',
-            color: '#2f80ed',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.9
-        }).addTo(mapMarkersGroup);
-        startMarker.bindPopup(`<b>🟢 Старт смены</b><br>${shift.date} в ${shift.start}`);
-    }
-
-    if (shift.endLat && shift.endLon) {
-        const endMarker = L.circleMarker([shift.endLat, shift.endLon], {
-            radius: 9,
-            fillColor: '#ff4f6d',
-            color: '#ff4f6d',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.9
-        }).addTo(mapMarkersGroup);
-        endMarker.bindPopup(`<b>🔴 Финиш смены</b><br>${shift.date} в ${shift.end}`);
-    }
 
     shiftPharms.forEach((p, idx) => {
         addPharmacyMarker(p, idx + 1);
     });
 
-    const routePoints = [];
-    if (shift.startLat && shift.startLon) {
-        routePoints.push([shift.startLat, shift.startLon]);
-    }
-    shiftPharms.forEach(p => {
-        routePoints.push([p.latitude, p.longitude]);
-    });
-    if (shift.endLat && shift.endLon) {
-        routePoints.push([shift.endLat, shift.endLon]);
-    }
-
-    if (routePoints.length > 1) {
-        mapPolyline = L.polyline(routePoints, {
-            color: '#2edd8e',
-            weight: 3,
-            dashArray: '5, 8',
-            opacity: 0.7
-        }).addTo(mapInstance);
-    }
-
     if (mapMarkersGroup.getLayers().length > 0) {
         mapInstance.fitBounds(mapMarkersGroup.getBounds(), { padding: [40, 40] });
     }
 
-    let summaryText = `<b>Смена ${shift.date} (${shift.start} - ${shift.end})</b><br>`;
-    summaryText += `⏱ Продолжительность: ${shift.duration} мин<br>`;
-    summaryText += `🏪 Аптек на карте: ${shiftPharms.length} из ${shift.fact} посещенных`;
+    const displayDate = shift.date ? shift.date.split('-').reverse().join('.') : '—';
+    let summaryText = `<b>Смена ${displayDate} (${shift.start || ''} - ${shift.end || ''})</b><br>`;
+    summaryText += `🏪 Аптек на карте: ${shiftPharms.length}`;
     showMapSummary(summaryText);
 }
 
@@ -965,17 +890,13 @@ function addPharmacyMarker(p, number) {
     }).addTo(mapMarkersGroup);
 
     const statusLabels = { cold: "Холодный контакт", inwork: "В работе", deal: "Договорились", decline: "Отказ" };
-    const statusEmojis = { cold: "❄️", inwork: "🔄", deal: "✅", decline: "❌" };
-
     const popupContent = `
         <div style="font-family:'DM Sans',sans-serif; font-size:13px; color:var(--white);">
-            <div style="font-weight:700; font-size:15px; margin-bottom:6px; color:var(--accent);">🏪 ${number ? number + '. ' : ''}${p.name}</div>
-            <div style="margin-bottom:4px;">📅 ${p.date} в ${p.time}</div>
-            <div style="margin-bottom:4px;">👤 ЛПР: <b>${p.lprName || '—'}</b></div>
-            <div style="margin-bottom:4px;">📞 Тел: <b>${p.lprPhone}</b></div>
-            <div style="margin-bottom:4px;">💻 ПО: <b>${p.software}${p.softwareId ? ' (ID: ' + p.softwareId + ')' : ''}</b></div>
-            <div style="margin-top:6px; font-weight:600; color:var(--green);">${statusEmojis[p.status] || ''} ${statusLabels[p.status] || p.status}</div>
-            ${p.comment ? `<div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.1); font-style:italic; color:var(--muted);">💬 ${p.comment}</div>` : ''}
+            <div style="font-weight:700; font-size:15px; color:var(--teal);">🏪 ${number}. ${p.name}</div>
+            <div>👤 ЛПР: <b>${p.lprName || '—'}</b></div>
+            <div>📞 Тел: <b>${p.lprPhone}</b></div>
+            <div>💻 ПО: <b>${p.software}</b></div>
+            <div style="margin-top:6px; font-weight:600; color:var(--green);">${statusLabels[p.status] || p.status}</div>
         </div>
     `;
     marker.bindPopup(popupContent);
@@ -983,33 +904,23 @@ function addPharmacyMarker(p, number) {
 
 function renderMapData(pharmacies, title, drawRoute) {
     clearMapData();
-
-    pharmacies.forEach((p, idx) => {
-        addPharmacyMarker(p, idx + 1);
-    });
+    pharmacies.forEach((p, idx) => { addPharmacyMarker(p, idx + 1); });
 
     if (drawRoute && pharmacies.length > 1) {
         const routePoints = pharmacies.map(p => [p.latitude, p.longitude]);
-        mapPolyline = L.polyline(routePoints, {
-            color: '#2edd8e',
-            weight: 3,
-            dashArray: '5, 8',
-            opacity: 0.7
-        }).addTo(mapInstance);
+        mapPolyline = L.polyline(routePoints, { color: '#2edd8e', weight: 3, dashArray: '5, 8', opacity: 0.7 }).addTo(mapInstance);
     }
 
     if (mapMarkersGroup.getLayers().length > 0) {
         mapInstance.fitBounds(mapMarkersGroup.getBounds(), { padding: [40, 40] });
     }
-
-    showMapSummary(`<b>${title}</b><br>📍 Всего аптек на карте: ${pharmacies.length}`);
+    showMapSummary(`<b>${title}</b><br>📍 Аптек на карте: ${pharmacies.length}`);
 }
 
 function showMapSummary(text) {
     const card = document.getElementById("mapSummaryCard");
     const container = document.getElementById("mapSummaryText");
     if (!card || !container) return;
-
     container.innerHTML = text;
     card.style.display = "block";
 }
@@ -1020,56 +931,11 @@ function updateMapControlActiveButton(activeIndex) {
         if (idx === activeIndex) {
             btn.style.background = "linear-gradient(135deg, var(--teal), var(--teal2))";
             btn.style.color = "#080f1a";
-            btn.style.borderColor = "transparent";
         } else {
             btn.style.background = "var(--card2)";
             btn.style.color = "var(--white)";
-            btn.style.borderColor = "var(--border)";
         }
     });
 }
 
-function showMapForCustomDateRange() {
-    const fromInput = document.getElementById("mapDateFrom");
-    const toInput = document.getElementById("mapDateTo");
-    if (!fromInput || !toInput) return;
-
-    const fromVal = fromInput.value;
-    const toVal = toInput.value;
-
-    if (!fromVal || !toVal) {
-        showToast("⚠️ Укажите обе даты");
-        return;
-    }
-
-    updateMapControlActiveButton(-1);
-    document.getElementById("mapShiftSelect").value = "";
-    let history = dbCache.pharmacies || [];
-
-    const startTimestamp = new Date(fromVal + "T00:00:00").getTime();
-    const endTimestamp = new Date(toVal + "T23:59:59").getTime();
-
-    if (startTimestamp > endTimestamp) {
-        showToast("⚠️ Начальная дата не может быть больше конечной");
-        return;
-    }
-
-    const filtered = history.filter(p => p.timestamp && p.timestamp >= startTimestamp && p.timestamp <= endTimestamp && p.latitude && p.longitude);
-
-    if (filtered.length === 0) {
-        clearMapData();
-        showMapSummary(`📭 За период с ${formatDateString(fromVal)} по ${formatDateString(toVal)} аптек с геолокацией нет`);
-        return;
-    }
-
-    filtered.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-    
-    const title = `Аптеки с ${formatDateString(fromVal)} по ${formatDateString(toVal)}`;
-    renderMapData(filtered, title, false);
-}
-
-function formatDateString(dateStr) {
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr;
-    return `${parts[2]}.${parts[1]}.${parts[0]}`;
-}
+function getAdminTokenFeatureGroup() { return null; }
