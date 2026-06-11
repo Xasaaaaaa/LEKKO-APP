@@ -288,7 +288,7 @@ function savePharmacy() {
         function(pos) {
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
-            const mapLink = `http://googleusercontent.com/maps.google.com/maps?q=${lat},${lon}`;
+            const mapLink = `http://maps.google.com/?q=${lat},${lon}`;
 
             const data = {
                 event: "pharmacy_add",
@@ -305,7 +305,7 @@ function savePharmacy() {
                 longitude: lon,
                 map: mapLink,
                 timestamp: Date.now(),
-                date: new Date().toISOString().split('T')[0], // Синхронизировано в YYYY-MM-DD
+                date: new Date().toISOString().split('T')[0], 
                 time: new Date().toLocaleTimeString("ru-RU", {hour: '2-digit', minute: '2-digit'})
             };
 
@@ -756,7 +756,7 @@ function initMap() {
     }
 
     mapInstance = L.map('map-canvas').setView([41.311081, 69.240562], 12);
-    mapMarkersGroup = L.featureGroup().addTo(getAdminTokenFeatureGroup() || mapInstance);
+    mapMarkersGroup = L.featureGroup().addTo(mapInstance);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '© OpenStreetMap contributors © CARTO',
@@ -937,5 +937,3 @@ function updateMapControlActiveButton(activeIndex) {
         }
     });
 }
-
-function getAdminTokenFeatureGroup() { return null; }

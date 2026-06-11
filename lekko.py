@@ -410,7 +410,7 @@ async def handle_event(request):
         data = await request.json()
         event_type = data.get("event")
         user_data = data.get("user") or {}
-        user_id = chatId = data.get("chat_id") or user_data.get("id")
+        user_id = data.get("chat_id") or user_data.get("id")
         first_name = user_data.get("first_name", "Сотрудник")
 
         if not user_id:
@@ -532,122 +532,69 @@ async def handle_event(request):
     return web.json_response({"ok": True}, headers=headers)
 
 
-async def main():
-    await init_db()
+async def handle_data(request):
+    h = cors_headers()
+    if request.method == "OPTIONS":
+        return web.Response(status=200, headers=h)
+    user_id = request.query.get("user_id")
+    if not user_id:
+        return web.json_response({"ok": False, "error": "No user_id"}, headers=h)
+    try:
+        async with db_pool.acquire() as conn:
+            pharmacies = await conn.fetch("""
+                SELECT id, name, lpr_name, lpr_phone, software, software_id,
+                       status, comment, photos_count, latitude, longitude, map_link, created_at
+                FROM pharmacies WHERE user_id=$1 ORDER BY created_at DESC
+            """, int(user_id))
+            shifts = await conn.fetch("""
+                SELECT id, start_time, end_time, worked, latitude, longitude,
+                       map_link, date, distance_km, created_at
+                FROM shifts WHERE user_id=$1 ORDER BY created_at DESC
+            """, int(user_id))
+            active_shift = await conn.fetchrow("""
+                SELECT id, created_at, map_link FROM shifts
+                WHERE user_id=$1 AND end_time IS NULL ORDER BY id DESC LIMIT 1
+            """, int(user_id))
+            today = now_local().date()
+            pharma_today = await conn.fetchval("""
+                SELECT COUNT(*) FROM pharmacies
+                WHERE user_id=$1 AND (created_at + INTERVAL '5 hours')::DATE=$2
+            """, int(user_id), today)
 
-    app_web = web.Application()
-    app_web.router.add_post("/event", handle_event)
-    app_web.router.add_route("OPTIONS", "/event", handle_event)
-    app_web.router.add_get("/data", handle_data)
-    app_web.router.add_route("OPTIONS", "/data", handle_data)
-    app_web.router.add_get("/admin/users", handle_admin_users)
-    app_web.router.add_route("OPTIONS", "/admin/users", handle_admin_users)
-    app_web.router.add_get("/admin/pharmacies", handle_admin_pharmacies)
-    app_web.router.add_route("OPTIONS", "/admin/pharmacies", handle_admin_pharmacies)
-    app_web.router.add_get("/admin/shifts", handle_admin_shifts)
-    app_web.router.add_route("OPTIONS", "/admin/shifts", handle_admin_shifts)
-    app_web.router.add_get("/admin/stats", handle_admin_stats)
-    app_web.router.add_route("OPTIONS", "/admin/stats", handle_admin_stats)
+        def fmt_p(p):
+            local = p['created_at'] + TZ_OFFSET
+            return {
+                "id": p['id'], "name": p['name'], "lprName": p['lpr_name'],
+                "lprPhone": p['lpr_phone'], "software": p['software'],
+                "softwareId": p['software_id'], "status": p['status'],
+                "comment": p['comment'], "photosCount": p['photos_count'],
+                "latitude": p['latitude'], "longitude": p['longitude'],
+                "map": p['map_link'], "date": local.strftime("%Y-%m-%d"), # Исправлено для синхронизации с фронтендом YYYY-MM-DD
+                "time": local.strftime("%H:%M"),
+                "timestamp": int(p['created_at'].timestamp() * 1000)
+            }
 
-    runner = web.AppRunner(app_web)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8080)))
+        def fmt_s(s):
+            return {
+                "id": s['id'], "date": s['date'], "start": s['start_time'],
+                "end": s['end_time'], "duration": s['worked'],
+                "distanceKm": s['distance_km'], "startMap": s['map_link'],
+                "startTimestamp": int(s['created_at'].timestamp() * 1000)
+            }
 
-    asyncio.create_task(site.start())
-    asyncio.create_task(scheduler())
-    print("🚀 Веб-сервер запущен")
+        return web.json_response({"ok": True,
+            "pharmacies": [fmt_p(p) for p in pharmacies],
+            "shifts": [fmt_s(s) for s in shifts if s['end_time']],
+            "activeShift": {
+                "startTimestamp": int(active_shift['created_at'].timestamp() * 1000),
+                "startMap": active_shift['map_link']
+            } if active_shift else None,
+            "dayFact": pharma_today
+        }, headers=h)
+    except Exception as e:
+        print(f"❌ handle_data error: {e}")
+        return web.json_response({"ok": False, "error": str(e)}, headers=h)
 
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
-
-# =========================
-# НОВЫЕ КОМАНДЫ БОТА
-# =========================
-
-@dp.message(Command("users"))
-async def cmd_users(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        await message.answer("❌ Нет доступа.")
-        return
-    async with db_pool.acquire() as conn:
-        users = await conn.fetch("SELECT id, username, first_name, created_at FROM users ORDER BY created_at DESC")
-        counts = await conn.fetch("""
-            SELECT u.id,
-                COUNT(DISTINCT s.id) as shifts,
-                COUNT(DISTINCT p.id) as pharmas
-            FROM users u
-            LEFT JOIN shifts s ON s.user_id = u.id
-            LEFT JOIN pharmacies p ON p.user_id = u.id
-            GROUP BY u.id
-        """)
-    counts_dict = {r['id']: r for r in counts}
-    text = f"👥 *Сотрудники ({len(users)}):*\n\n"
-    for u in users:
-        c = counts_dict.get(u['id'], {})
-        uname = f"@{u['username']}" if u['username'] else f"id{u['id']}"
-        text += (
-            f"• *{u['first_name']}* ({uname})\n"
-            f"  🕒 Смен: {c.get('shifts',0)} | 🏥 Аптек: {c.get('pharmas',0)}\n"
-        )
-    await message.answer(text, parse_mode="Markdown")
-
-
-@dp.message(Command("pharmacy"))
-async def cmd_pharmacy(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        await message.answer("❌ Нет доступа.")
-        return
-    args = message.text.split(maxsplit=1)
-    if len(args) < 2:
-        await message.answer("Использование: /pharmacy Имя\nПример: /pharmacy Xas")
-        return
-    name_filter = args[1].strip()
-    async with db_pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT name, lpr_name, lpr_phone, software, status, comment, map_link,
-                   (created_at + INTERVAL '5 hours') as created_local
-            FROM pharmacies
-            WHERE LOWER(first_name) LIKE LOWER($1)
-            ORDER BY created_at DESC
-            LIMIT 20
-        """, f"%{name_filter}%")
-    if not rows:
-        await message.answer(f"❌ Аптек для сотрудника *{name_filter}* не найдено.", parse_mode="Markdown")
-        return
-    status_emoji = {"cold": "❄️", "inwork": "🔄", "deal": "✅", "decline": "❌"}
-    text = f"🏥 *Аптеки сотрудника {name_filter} ({len(rows)}):*\n\n"
-    for r in rows:
-        date_str = r['created_local'].strftime("%d.%m %H:%M")
-        map_part = f" | [📍]({r['map_link']})" if r['map_link'] else ""
-        text += (
-            f"{status_emoji.get(r['status'],'📋')} *{r['name']}* ({date_str}{map_part})\n"
-            f"  👤 {r['lpr_name']} | 📞 {r['lpr_phone']}\n"
-            f"  💻 {r['software']}\n"
-        )
-        if r['comment']:
-            text += f"  💬 {r['comment']}\n"
-        text += "\n"
-    await message.answer(text, parse_mode="Markdown", disable_web_page_preview=True)
-
-
-# =========================
-# ЭНДПОИНТЫ ДЛЯ АДМИН ПАНЕЛИ
-# =========================
-
-ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "lekko_admin_2026")
-
-def cors_headers():
-    return {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, X-Admin-Token"
-    }
-
-def check_token(request):
-    token = request.headers.get("X-Admin-Token") or request.query.get("token")
-    return token == ADMIN_TOKEN
 
 async def handle_admin_users(request):
     h = cors_headers()
@@ -782,65 +729,112 @@ async def handle_admin_stats(request):
     }}, headers=h)
 
 
-async def handle_data(request):
-    h = cors_headers()
-    if request.method == "OPTIONS":
-        return web.Response(status=200, headers=h)
-    user_id = request.query.get("user_id")
-    if not user_id:
-        return web.json_response({"ok": False, "error": "No user_id"}, headers=h)
-    try:
-        async with db_pool.acquire() as conn:
-            pharmacies = await conn.fetch("""
-                SELECT id, name, lpr_name, lpr_phone, software, software_id,
-                       status, comment, photos_count, latitude, longitude, map_link, created_at
-                FROM pharmacies WHERE user_id=$1 ORDER BY created_at DESC
-            """, int(user_id))
-            shifts = await conn.fetch("""
-                SELECT id, start_time, end_time, worked, latitude, longitude,
-                       map_link, date, distance_km, created_at
-                FROM shifts WHERE user_id=$1 ORDER BY created_at DESC
-            """, int(user_id))
-            active_shift = await conn.fetchrow("""
-                SELECT id, created_at, map_link FROM shifts
-                WHERE user_id=$1 AND end_time IS NULL ORDER BY id DESC LIMIT 1
-            """, int(user_id))
-            today = now_local().date()
-            pharma_today = await conn.fetchval("""
-                SELECT COUNT(*) FROM pharmacies
-                WHERE user_id=$1 AND (created_at + INTERVAL '5 hours')::DATE=$2
-            """, int(user_id), today)
+@dp.message(Command("users"))
+async def cmd_users(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ Нет доступа.")
+        return
+    async with db_pool.acquire() as conn:
+        users = await conn.fetch("SELECT id, username, first_name, created_at FROM users ORDER BY created_at DESC")
+        counts = await conn.fetch("""
+            SELECT u.id,
+                COUNT(DISTINCT s.id) as shifts,
+                COUNT(DISTINCT p.id) as pharmas
+            FROM users u
+            LEFT JOIN shifts s ON s.user_id = u.id
+            LEFT JOIN pharmacies p ON p.user_id = u.id
+            GROUP BY u.id
+        """)
+    counts_dict = {r['id']: r for r in counts}
+    text = f"👥 *Сотрудники ({len(users)}):*\n\n"
+    for u in users:
+        c = counts_dict.get(u['id'], {})
+        uname = f"@{u['username']}" if u['username'] else f"id{u['id']}"
+        text += (
+            f"• *{u['first_name']}* ({uname})\n"
+            f"  🕒 Смен: {c.get('shifts',0)} | 🏥 Аптек: {c.get('pharmas',0)}\n"
+        )
+    await message.answer(text, parse_mode="Markdown")
 
-        def fmt_p(p):
-            local = p['created_at'] + TZ_OFFSET
-            return {
-                "id": p['id'], "name": p['name'], "lprName": p['lpr_name'],
-                "lprPhone": p['lpr_phone'], "software": p['software'],
-                "softwareId": p['software_id'], "status": p['status'],
-                "comment": p['comment'], "photosCount": p['photos_count'],
-                "latitude": p['latitude'], "longitude": p['longitude'],
-                "map": p['map_link'], "date": local.strftime("%d.%m.%Y"),
-                "time": local.strftime("%H:%M"),
-                "timestamp": int(p['created_at'].timestamp() * 1000)
-            }
 
-        def fmt_s(s):
-            return {
-                "id": s['id'], "date": s['date'], "start": s['start_time'],
-                "end": s['end_time'], "duration": s['worked'],
-                "distanceKm": s['distance_km'], "startMap": s['map_link'],
-                "startTimestamp": int(s['created_at'].timestamp() * 1000)
-            }
+@dp.message(Command("pharmacy"))
+async def cmd_pharmacy(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ Нет доступа.")
+        return
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        await message.answer("Использование: /pharmacy Имя\nПример: /pharmacy Xas")
+        return
+    name_filter = args[1].strip()
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT name, lpr_name, lpr_phone, software, status, comment, map_link,
+                   (created_at + INTERVAL '5 hours') as created_local
+            FROM pharmacies
+            WHERE LOWER(first_name) LIKE LOWER($1)
+            ORDER BY created_at DESC
+            LIMIT 20
+        """, f"%{name_filter}%")
+    if not rows:
+        await message.answer(f"❌ Аптек для сотрудника *{name_filter}* не найдено.", parse_mode="Markdown")
+        return
+    status_emoji = {"cold": "❄️", "inwork": "🔄", "deal": "✅", "decline": "❌"}
+    text = f"🏥 *Аптеки сотрудника {name_filter} ({len(rows)}):*\n\n"
+    for r in rows:
+        date_str = r['created_local'].strftime("%d.%m %H:%M")
+        map_part = f" | [📍]({r['map_link']})" if r['map_link'] else ""
+        text += (
+            f"{status_emoji.get(r['status'],'📋')} *{r['name']}* ({date_str}{map_part})\n"
+            f"  👤 {r['lpr_name']} | 📞 {r['lpr_phone']}\n"
+            f"  💻 {r['software']}\n"
+        )
+        if r['comment']:
+            text += f"  💬 {r['comment']}\n"
+        text += "\n"
+    await message.answer(text, parse_mode="Markdown", disable_web_page_preview=True)
 
-        return web.json_response({"ok": True,
-            "pharmacies": [fmt_p(p) for p in pharmacies],
-            "shifts": [fmt_s(s) for s in shifts if s['end_time']],
-            "activeShift": {
-                "startTimestamp": int(active_shift['created_at'].timestamp() * 1000),
-                "startMap": active_shift['map_link']
-            } if active_shift else None,
-            "dayFact": pharma_today
-        }, headers=h)
-    except Exception as e:
-        print(f"❌ handle_data error: {e}")
-        return web.json_response({"ok": False, "error": str(e)}, headers=h)
+
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "lekko_admin_2026")
+
+def cors_headers():
+    return {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, X-Admin-Token"
+    }
+
+def check_token(request):
+    token = request.headers.get("X-Admin-Token") or request.query.get("token")
+    return token == ADMIN_TOKEN
+
+
+async def main():
+    await init_db()
+
+    app_web = web.Application()
+    app_web.router.add_post("/event", handle_event)
+    app_web.router.add_route("OPTIONS", "/event", handle_event)
+    app_web.router.add_get("/data", handle_data)
+    app_web.router.add_route("OPTIONS", "/data", handle_data)
+    app_web.router.add_get("/admin/users", handle_admin_users)
+    app_web.router.add_route("OPTIONS", "/admin/users", handle_admin_users)
+    app_web.router.add_get("/admin/pharmacies", handle_admin_pharmacies)
+    app_web.router.add_route("OPTIONS", "/admin/pharmacies", handle_admin_pharmacies)
+    app_web.router.add_get("/admin/shifts", handle_admin_shifts)
+    app_web.router.add_route("OPTIONS", "/admin/shifts", handle_admin_shifts)
+    app_web.router.add_get("/admin/stats", handle_admin_stats)
+    app_web.router.add_route("OPTIONS", "/admin/stats", handle_admin_stats)
+
+    runner = web.AppRunner(app_web)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8080)))
+
+    asyncio.create_task(site.start())
+    asyncio.create_task(scheduler())
+    print("🚀 Веб-сервер запущен")
+
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
