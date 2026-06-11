@@ -14,6 +14,7 @@ TOKEN = os.environ.get("BOT_TOKEN", "8492885588:AAFPmxL_u4elT0Z5qHVuP0-FicEjPpkp
 DATABASE_URL = os.environ.get("DATABASE_URL")
 WEB_APP_URL = "https://joyful-gingersnap-8d8a6c.netlify.app"
 ADMIN_ID = 7526702987
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "lekko_admin_2026")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -75,7 +76,6 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
-        await conn.execute("ALTER TABLE shifts ADD COLUMN IF NOT EXISTS distance_km FLOAT")
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS pharmacies (
                 id SERIAL PRIMARY KEY,
@@ -94,17 +94,18 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
+        # Гарантированное добавление новых колонок сразу после создания таблиц
+        await conn.execute("ALTER TABLE shifts ADD COLUMN IF NOT EXISTS distance_km FLOAT")
         await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS latitude FLOAT")
         await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS longitude FLOAT")
         await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS map_link TEXT")
         await conn.execute("ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS software_id TEXT")
 
-    print("✅ База данных готова")
+    print("✅ База данных успешно инициализирована и обновлена")
 
 
 @dp.message(CommandStart())
 async def start(message: Message):
-    print(f"👤 /start от {message.from_user.first_name}")
     uname = message.from_user.username or "—"
     fname = message.from_user.first_name or "Сотрудник"
     
@@ -138,10 +139,6 @@ async def start(message: Message):
         reply_markup=kb
     )
 
-
-# =========================
-# /stats — сводка за сегодня
-# =========================
 
 @dp.message(Command("stats"))
 async def cmd_stats(message: Message):
@@ -201,10 +198,6 @@ async def cmd_stats(message: Message):
     await message.answer(text, parse_mode="Markdown")
 
 
-# =========================
-# /report — отчёт за текущую неделю (пн–вс)
-# =========================
-
 @dp.message(Command("report"))
 async def cmd_report(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -213,10 +206,6 @@ async def cmd_report(message: Message):
     await send_weekly_report()
 
 
-# =========================
-# /reportall — отчёт за всё время
-# =========================
-
 @dp.message(Command("reportall"))
 async def cmd_reportall(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -224,10 +213,6 @@ async def cmd_reportall(message: Message):
         return
     await send_all_time_report()
 
-
-# =========================
-# ОТЧЁТ ЗА ВСЁ ВРЕМЯ
-# =========================
 
 async def send_all_time_report():
     async with db_pool.acquire() as conn:
@@ -289,12 +274,7 @@ async def send_all_time_report():
     )
 
     await bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="Markdown")
-    print("✅ Отчёт за всё время отправлен")
 
-
-# =========================
-# ЕЖЕНЕДЕЛЬНЫЙ ОТЧЁТ (текущая неделя пн–вс)
-# =========================
 
 async def send_weekly_report():
     local_now = now_local()
@@ -366,12 +346,7 @@ async def send_weekly_report():
     )
 
     await bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="Markdown")
-    print("✅ Еженедельный отчёт отправлен")
 
-
-# =========================
-# ПЛАНИРОВЩИК — пятница 18:30
-# =========================
 
 async def scheduler():
     while True:
@@ -395,7 +370,7 @@ async def notify_admin(text, lat=None, lon=None):
 
 
 # =========================
-# WEB SERVER & WEBHOOK HANDLE
+# WEB SERVER & HANDLERS
 # =========================
 
 async def handle_event(request):
@@ -421,9 +396,6 @@ async def handle_event(request):
         lon = data.get("longitude")
         map_link = data.get("map")
 
-        # -------------------------
-        # НАЧАЛО СМЕНЫ
-        # -------------------------
         if event_type == "shift_start":
             today_str = now_local().date().strftime("%Y-%m-%d")
             async with db_pool.acquire() as conn:
@@ -443,9 +415,6 @@ async def handle_event(request):
             if int(user_id) != ADMIN_ID:
                 await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown", disable_web_page_preview=True)
 
-        # -------------------------
-        # ЗАВЕРШЕНИЕ СМЕНЫ
-        # -------------------------
         elif event_type == "shift_end":
             today_str = now_local().date().strftime("%Y-%m-%d")
             distance = 0.0
@@ -484,9 +453,6 @@ async def handle_event(request):
             if int(user_id) != ADMIN_ID:
                 await bot.send_message(chat_id=int(user_id), text=text, parse_mode="Markdown", disable_web_page_preview=True)
 
-        # -------------------------
-        # ДОБАВЛЕНИЕ АПТЕКИ
-        # -------------------------
         elif event_type == "pharmacy_add":
             sw_name = data.get("software")
             sw_id = data.get("softwareId")
@@ -527,7 +493,7 @@ async def handle_event(request):
                 await notify_admin(text, lat, lon)
 
     except Exception as e:
-        print(f"❌ Ошибка обработки: {e}")
+        print(f"❌ Ошибка обработки события: {e}")
         return web.Response(status=500, text=str(e), headers=headers)
 
     return web.json_response({"ok": True}, headers=headers)
@@ -570,7 +536,7 @@ async def handle_data(request):
                 "softwareId": p['software_id'], "status": p['status'],
                 "comment": p['comment'], "photosCount": p['photos_count'],
                 "latitude": p['latitude'], "longitude": p['longitude'],
-                "map": p['map_link'], "date": local.strftime("%Y-%m-%d"),
+                "map": p['map_link'], "date": local.strftime("%d.%m.%Y"),
                 "time": local.strftime("%H:%M"),
                 "timestamp": int(p['created_at'].timestamp() * 1000)
             }
@@ -593,7 +559,7 @@ async def handle_data(request):
             "dayFact": pharma_today
         }, headers=h)
     except Exception as e:
-        print(f"❌ handle_data error: {e}")
+        print(f"❌ Ошибка handle_data: {e}")
         return web.json_response({"ok": False, "error": str(e)}, headers=h)
 
 
@@ -645,14 +611,18 @@ async def handle_admin_pharmacies(request):
         if user_id:
             rows = await conn.fetch("""
                 SELECT p.*, (p.created_at + INTERVAL '5 hours') as local_time,
-                COALESCE(p.first_name, 'Неизвестный') as agent_name
-                FROM pharmacies p WHERE p.user_id=$1 ORDER BY p.created_at DESC
+                COALESCE(u.first_name, p.first_name, 'Неизвестный') as agent_name
+                FROM pharmacies p 
+                LEFT JOIN users u ON p.user_id = u.id
+                WHERE p.user_id=$1 ORDER BY p.created_at DESC
             """, int(user_id))
         else:
             rows = await conn.fetch("""
                 SELECT p.*, (p.created_at + INTERVAL '5 hours') as local_time,
-                COALESCE(p.first_name, 'Неизвестный') as agent_name
-                FROM pharmacies p ORDER BY p.created_at DESC LIMIT 200
+                COALESCE(u.first_name, p.first_name, 'Неизвестный') as agent_name
+                FROM pharmacies p 
+                LEFT JOIN users u ON p.user_id = u.id
+                ORDER BY p.created_at DESC LIMIT 200
             """)
     result = [{
         "id": r['id'],
@@ -681,13 +651,17 @@ async def handle_admin_shifts(request):
     async with db_pool.acquire() as conn:
         if user_id:
             rows = await conn.fetch("""
-                SELECT s.*, COALESCE(s.first_name, 'Неизвестный') as agent_name 
-                FROM shifts s WHERE s.user_id=$1 ORDER BY s.created_at DESC
+                SELECT s.*, COALESCE(u.first_name, s.first_name, 'Неизвестный') as agent_name 
+                FROM shifts s 
+                LEFT JOIN users u ON s.user_id = u.id
+                WHERE s.user_id=$1 ORDER BY s.created_at DESC
             """, int(user_id))
         else:
             rows = await conn.fetch("""
-                SELECT s.*, COALESCE(s.first_name, 'Неизвестный') as agent_name 
-                FROM shifts s ORDER BY s.created_at DESC LIMIT 100
+                SELECT s.*, COALESCE(u.first_name, s.first_name, 'Неизвестный') as agent_name 
+                FROM shifts s 
+                LEFT JOIN users u ON s.user_id = u.id
+                ORDER BY s.created_at DESC LIMIT 100
             """)
     result = [{
         "id": r['id'],
@@ -777,11 +751,11 @@ async def cmd_pharmacy(message: Message):
     name_filter = args[1].strip()
     async with db_pool.acquire() as conn:
         rows = await conn.fetch("""
-            SELECT name, lpr_name, lpr_phone, software, status, comment, map_link,
-                   (created_at + INTERVAL '5 hours') as created_local
-            FROM pharmacies
-            WHERE LOWER(first_name) LIKE LOWER($1)
-            ORDER BY created_at DESC
+            SELECT p.name, p.lpr_name, p.lpr_phone, p.software, p.status, p.comment, p.map_link,
+                   (p.created_at + INTERVAL '5 hours') as created_local
+            FROM pharmacies p
+            WHERE LOWER(p.first_name) LIKE LOWER($1)
+            ORDER BY p.created_at DESC
             LIMIT 20
         """, f"%{name_filter}%")
     if not rows:
@@ -802,8 +776,6 @@ async def cmd_pharmacy(message: Message):
         text += "\n"
     await message.answer(text, parse_mode="Markdown", disable_web_page_preview=True)
 
-
-ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "lekko_admin_2026")
 
 def cors_headers():
     return {
