@@ -17,23 +17,44 @@ function getGreeting() {
     return "🌙 Доброй ночи";
 }
 
-function renderDashboard() {
-    // Сбрасываем dayFact если это новый день
-    const today = new Date().toLocaleDateString("ru-RU");
-    const lastDay = localStorage.getItem("lastFactDay");
-    if (lastDay !== today) {
-        localStorage.setItem("dayFact", 0);
-        localStorage.setItem("lastFactDay", today);
-    }
+// =========================
+// ГЛОБАЛЬНЫЙ КЭШ ДАННЫХ ИЗ БД
+// =========================
 
-    // Считаем аптеки из реальной истории за сегодня
-    let fact = 0;
+let dbCache = {
+    pharmacies: [],
+    shifts: [],
+    activeShift: null,
+    dayFact: 0,
+    dayPlan: Number(localStorage.getItem("dayPlan") || 0)
+};
+
+async function loadFromServer() {
+    if (!chatId) return;
     try {
-        const history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]");
-        fact = history.filter(p => p.date === today).length;
-    } catch(e) {}
+        const res = await fetch(`${SERVER}/data?user_id=${chatId}`);
+        const data = await res.json();
+        if (!data.ok) return;
 
-    const plan = Number(localStorage.getItem("dayPlan") || 0);
+        dbCache.pharmacies = data.pharmacies || [];
+        dbCache.shifts = data.shifts || [];
+        dbCache.activeShift = data.activeShift || null;
+        dbCache.dayFact = data.dayFact || 0;
+
+        if (data.activeShift) {
+            localStorage.setItem("shift_start", data.activeShift.startTimestamp);
+        } else {
+            localStorage.removeItem("shift_start");
+        }
+
+    } catch(e) {
+        console.error("Ошибка загрузки данных:", e);
+    }
+}
+
+function renderDashboard() {
+    const fact = dbCache.dayFact;
+    const plan = dbCache.dayPlan;
 
     const factEl = document.getElementById("dash_fact");
     const pctEl = document.getElementById("dash_pct");
@@ -74,7 +95,11 @@ if (document.getElementById("user")) {
         user ? `${getGreeting()}, <b>${user.first_name}</b>! 👋` : "Пользователь не найден";
 }
 
-renderDashboard();
+// Загружаем данные из БД при старте
+loadFromServer().then(() => {
+    renderDashboard();
+    checkUndoWindow();
+});
 
 let photos = [];
 
@@ -133,7 +158,7 @@ function openPage(page) {
 
 function back() {
     openPage("dashboard");
-    renderDashboard();
+    loadFromServer().then(() => renderDashboard());
 }
 
 // =========================
@@ -288,9 +313,9 @@ function savePharmacy() {
             addPharmacyStat();
 
             try {
-                let localHistory = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]");
+                // data in DB cache
                 localHistory.unshift(data);
-                localStorage.setItem("pharmacyHistoryList", JSON.stringify(localHistory));
+                // data stored in DB
             } catch(e) { console.error("Ошибка локальной истории:", e); }
 
             showPharmacyCard(data);
@@ -343,9 +368,9 @@ function renderPharmacyHistory() {
     const list = document.getElementById("pharmacyHistoryList");
     if (!list) return;
     
-    let history = [];
+    let history = dbCache.pharmacies || [];
     try {
-        history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]");
+    history = dbCache.pharmacies || [];
     } catch(e) { history = []; }
     
     if (history.length === 0) {
@@ -385,8 +410,7 @@ function renderPharmacyHistory() {
 // =========================
 
 function openMapForToday() {
-    let history = [];
-    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+    let history = dbCache.pharmacies || [];
     
     const today = new Date().toLocaleDateString("ru-RU");
     const todayPharms = history.filter(p => p.date === today && p.latitude && p.longitude);
@@ -401,8 +425,7 @@ function openMapForToday() {
 }
 
 function openMapForPeriod(days) {
-    let history = [];
-    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+    let history = dbCache.pharmacies || [];
     
     const from = Date.now() - days * 86400000;
     const filtered = history.filter(p => p.timestamp && p.timestamp >= from && p.latitude && p.longitude);
@@ -477,9 +500,7 @@ function setupPhoneMask() {
 // =========================
 
 function addPharmacyStat() {
-    let f = Number(localStorage.getItem("dayFact") || 0);
-    f += 1;
-    localStorage.setItem("dayFact", f);
+    dbCache.dayFact += 1;
 }
 
 function renderProfile() {
@@ -493,18 +514,12 @@ function renderProfile() {
         }
     }
     
-    try {
-        let shiftHistory = JSON.parse(localStorage.getItem("shift_history") || "[]");
-        if(document.getElementById("stat_shifts_count")) document.getElementById("stat_shifts_count").innerText = shiftHistory.length;
-    } catch(e) {
-        if(document.getElementById("stat_shifts_count")) document.getElementById("stat_shifts_count").innerText = "0";
+    if(document.getElementById("stat_shifts_count")) {
+        document.getElementById("stat_shifts_count").innerText = (dbCache.shifts || []).length;
     }
 
-    try {
-        let pharmHistory = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]");
-        if(document.getElementById("stat_pharmacies_count")) document.getElementById("stat_pharmacies_count").innerText = pharmHistory.length;
-    } catch(e) {
-        if(document.getElementById("stat_pharmacies_count")) document.getElementById("stat_pharmacies_count").innerText = "0";
+    if(document.getElementById("stat_pharmacies_count")) {
+        document.getElementById("stat_pharmacies_count").innerText = (dbCache.pharmacies || []).length;
     }
 }
 
@@ -561,8 +576,10 @@ function saveDailyPlan() {
     }
     
     localStorage.setItem("dayPlan", val);
+    dbCache.dayPlan = Number(val);
     showToast("✅ План на день обновлен");
     renderDailyPlan();
+    renderDashboard();
     planInput.value = "";
 }
 
@@ -593,9 +610,9 @@ function endShift() {
             endTimestamp: end
         };
 
-        let history = JSON.parse(localStorage.getItem("shift_history") || "[]");
-        history.unshift(historyItem);
-        localStorage.setItem("shift_history", JSON.stringify(history));
+
+        // shift stored in DB
+
 
         sendToServer({
             event: "shift_end",
@@ -610,8 +627,11 @@ function endShift() {
         if (shiftInterval) clearInterval(shiftInterval);
 
         showToast("🔴 Смена завершена");
-        checkUndoWindow();
-        renderDailyPlan();
+        loadFromServer().then(() => {
+            renderDashboard();
+            checkUndoWindow();
+            renderDailyPlan();
+        });
     }
 
     if (navigator.geolocation) {
@@ -693,9 +713,7 @@ function validatePharmacyForm() {
 
 function renderHistory() {
     const list = document.getElementById("historyList");
-    if (!list) return;
     
-    let history = JSON.parse(localStorage.getItem("shift_history") || "[]");
     if (history.length === 0) {
         list.innerHTML = "<p style='text-align:center;color:var(--muted);padding:20px;'>История смен пуста</p>";
         return;
@@ -757,8 +775,7 @@ function initMap() {
 }
 
 function showMapForToday() {
-    let history = [];
-    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+    let history = dbCache.pharmacies || [];
     
     const today = new Date().toLocaleDateString("ru-RU");
     const todayPharms = history.filter(p => p.date === today && p.latitude && p.longitude);
@@ -779,8 +796,7 @@ function showMapForToday() {
 }
 
 function showMapForWeek() {
-    let history = [];
-    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+    let history = dbCache.pharmacies || [];
     
     const from = Date.now() - 7 * 86400000;
     const filtered = history.filter(p => p.timestamp && p.timestamp >= from && p.latitude && p.longitude);
@@ -801,8 +817,7 @@ function showMapForWeek() {
 }
 
 function showMapForAll() {
-    let history = [];
-    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+    let history = dbCache.pharmacies || [];
     
     const filtered = history.filter(p => p.latitude && p.longitude);
 
@@ -827,9 +842,9 @@ function populateShiftDropdown() {
 
     select.innerHTML = '<option value="" disabled selected>🔍 Выбрать смену из истории...</option>';
 
-    let shiftHistory = [];
+    let shiftHistory = dbCache.shifts || [];
     try {
-        shiftHistory = JSON.parse(localStorage.getItem("shift_history") || "[]");
+        shiftHistory = dbCache.shifts || [];
     } catch(e) { return; }
 
     shiftHistory.forEach((shift, index) => {
@@ -851,16 +866,14 @@ function showMapForSelectedShift() {
     document.getElementById("mapDateFrom").value = "";
     document.getElementById("mapDateTo").value = "";
 
-    let shiftHistory = [];
+    let shiftHistory = dbCache.shifts || [];
     try {
-        shiftHistory = JSON.parse(localStorage.getItem("shift_history") || "[]");
+        shiftHistory = dbCache.shifts || [];
     } catch(e) { return; }
 
     const shift = shiftHistory[shiftIndex];
     if (!shift) return;
-
-    let history = [];
-    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+    let history = dbCache.pharmacies || [];
 
     let shiftPharms = [];
     
@@ -1031,9 +1044,7 @@ function showMapForCustomDateRange() {
 
     updateMapControlActiveButton(-1);
     document.getElementById("mapShiftSelect").value = "";
-
-    let history = [];
-    try { history = JSON.parse(localStorage.getItem("pharmacyHistoryList") || "[]"); } catch(e) { return; }
+    let history = dbCache.pharmacies || [];
 
     const startTimestamp = new Date(fromVal + "T00:00:00").getTime();
     const endTimestamp = new Date(toVal + "T23:59:59").getTime();
